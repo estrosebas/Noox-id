@@ -10,7 +10,7 @@ def create_app():
     
     # Configurar CORS para permitir requests desde el frontend React
     CORS(app, 
-         origins=['http://localhost:5173', 'http://127.0.0.1:5173', 'https://attendanceperu.ooguy.com'],
+         origins=['http://localhost:5174','http://localhost:5173', 'http://127.0.0.1:5173', 'https://attendanceperu.ooguy.com'],
          methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
          allow_headers=['Content-Type', 'Authorization', 'X-API-Key', 'X-App-ID'],
          supports_credentials=True,
