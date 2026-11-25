@@ -3,3 +3,6 @@ deploy/.env.docker
 
 # Fotos y datos biométricos de pruebas
 articulo/datos/
+
+# Fotos de voluntarios (datos biométricos): nunca al repositorio
+evaluacion/datos/

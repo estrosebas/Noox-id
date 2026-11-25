@@ -1,0 +1,26 @@
+{
+  "genuino": {
+    "n": 100,
+    "media": 29.230486000051314,
+    "mediana": 28.922150000653346,
+    "p95": 31.142399999225745,
+    "max": 43.842399998538895,
+    "min": 27.989700000034645,
+    "aceptados": 100
+  },
+  "impostor": {
+    "n": 100,
+    "media": 29.73952099979215,
+    "mediana": 28.76049999940733,
+    "p95": 38.17290000006324,
+    "max": 48.054200000478886,
+    "min": 27.931500000704546,
+    "aceptados": 0
+  },
+  "equipo": {
+    "sistema": "Windows-11-10.0.26300-SP0",
+    "cpu": "Intel64 Family 6 Model 158 Stepping 13, GenuineIntel",
+    "python": "3.14.6"
+  },
+  "nota": "Tiempo de servidor en proceso (sin red): JSON + imagen + base de datos + YuNet + SFace."
+}
