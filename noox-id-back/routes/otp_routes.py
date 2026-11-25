@@ -21,14 +21,16 @@ otp_bp = Blueprint('otp', __name__)
 GENERIC_SENT = 'Si el correo está registrado, enviamos un código. Revisa tu bandeja.'
 
 
-def _send_code(email, app_name=None):
+def _send_code(email, app_name=None, purpose='login'):
     """Envía el código sin revelar si el correo existe. Devuelve (respuesta, estado)."""
     user = User.query.filter_by(email=email).first()
+    if purpose == 'register' and user and user.verified:
+        user = None   # ya verificado: no hay nada que reenviar (y no se revela)
     if not mailer.is_configured():
         return jsonify({'success': False, 'message': 'El envío de correo no está configurado en el servidor'}), 503
     if user:
         try:
-            otp.issue(user, app_name)
+            otp.issue(user, app_name, purpose)
         except otp.OtpRateLimited as e:
             return jsonify({'success': False, 'retry_after': e.retry_after,
                             'message': f'Espera {e.retry_after} s antes de pedir otro código'}), 429
@@ -90,3 +92,12 @@ def login_verify():
                         'exp': datetime.utcnow() + timedelta(days=7)}, Config.SECRET_KEY, algorithm='HS256')
     return jsonify({'success': True, 'message': 'Inicio de sesión con código exitoso',
                     'token': token, 'user': user.to_dict()}), 200
+
+
+@otp_bp.route('/register/resend', methods=['POST'])
+def register_resend():
+    """Reenvía el código de verificación del registro (solo para cuentas aún sin verificar)."""
+    data = request.get_json(silent=True) or {}
+    if not data.get('email'):
+        return jsonify({'success': False, 'message': 'Correo requerido'}), 400
+    return _send_code(data['email'], purpose='register')

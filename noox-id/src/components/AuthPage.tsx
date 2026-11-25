@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { ArrowLeft, Eye, EyeOff, Camera, X, RefreshCw } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import EmailOtpLogin from './EmailOtpLogin';
+import VerifyEmailStep from './VerifyEmailStep';
 import GoogleSignInButton from './GoogleSignInButton';
 
 interface AuthPageProps {
@@ -27,7 +28,7 @@ const AuthPage: React.FC<AuthPageProps> = ({ onBack }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  const { login, register, loginWithGoogle, loginWithFace, isLoading, error } = useAuth();
+  const { login, register, loginWithGoogle, loginWithFace, isLoading, error, pendingVerification } = useAuth();
 
   // Limpiar cámara al desmontar el componente
   useEffect(() => {
@@ -259,6 +260,9 @@ const AuthPage: React.FC<AuthPageProps> = ({ onBack }) => {
       [name]: value
     }));
   };
+
+  // Cuenta recién registrada (o sin verificar): primero se verifica el correo con el código
+  if (pendingVerification) return <VerifyEmailStep />;
 
   return (
     <div className="auth-container">

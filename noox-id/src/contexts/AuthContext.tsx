@@ -13,6 +13,10 @@ interface AuthContextType {
   loginWithFace: (email: string, faceImage: string) => Promise<boolean>;
   requestEmailOtp: (email: string) => Promise<boolean>;
   loginWithEmailOtp: (email: string, code: string) => Promise<boolean>;
+  /** Cuenta registrada cuyo correo falta verificar (se muestra el paso del código). */
+  pendingVerification: { email: string; sent: boolean } | null;
+  resendVerificationCode: () => Promise<boolean>;
+  cancelVerification: () => void;
   register: (userData: {
     firstname: string;
     lastname: string;
@@ -43,6 +47,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [pendingVerification, setPendingVerification] = useState<{ email: string; sent: boolean } | null>(null);
+
+  // El backend responde 403 con code EMAIL_NOT_VERIFIED cuando el correo aún no se verificó
+  const requiereVerificacion = (error: any, email: string): boolean => {
+    if (error?.response?.code === 'EMAIL_NOT_VERIFIED') {
+      setPendingVerification({ email, sent: false });
+      return true;
+    }
+    return false;
+  };
 
   // Verificar si hay un token guardado al cargar la app
   useEffect(() => {
@@ -99,6 +113,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         return false;
       }
     } catch (error: any) {
+      if (requiereVerificacion(error, email)) {
+        setError(error.message);
+        setIsLoading(false);
+        return false;
+      }
       setError(error.message || 'Error de conexión');
       setIsLoading(false);
       return false;
@@ -145,6 +164,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         return false;
       }
     } catch (error: any) {
+      if (requiereVerificacion(error, email)) {
+        setError(error.message);
+        setIsLoading(false);
+        return false;
+      }
       setError(error.message || 'Error de conexión');
       setIsLoading(false);
       return false;
@@ -170,6 +194,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       const response = await AuthService.emailOtpLogin(email, code);
       if (response.success && response.token && response.user) {
         localStorage.setItem('noox_token', String(response.token));
+        setPendingVerification(null);
         setUser(response.user);
         setIsLoading(false);
         return true;
@@ -197,6 +222,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
     try {
       const response = await AuthService.register(userData);
+      if (response.success && response.verification_required) {
+        // El correo aún no está verificado: se pide el código antes de poder iniciar sesión
+        setPendingVerification({ email: userData.email, sent: !!response.verification_sent });
+        setIsLoading(false);
+        return true;
+      }
       if (response.success) {
         // Registro exitoso, ahora hacer login automáticamente
         const loginResponse = await AuthService.login({ 
@@ -226,6 +257,24 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
+  const resendVerificationCode = async (): Promise<boolean> => {
+    if (!pendingVerification) return false;
+    setError(null);
+    try {
+      const response = await AuthService.resendRegistrationCode(pendingVerification.email);
+      if (response.success) setPendingVerification({ ...pendingVerification, sent: true });
+      return !!response.success;
+    } catch (error: any) {
+      setError(error.message || 'No se pudo enviar el código');
+      return false;
+    }
+  };
+
+  const cancelVerification = () => {
+    setPendingVerification(null);
+    setError(null);
+  };
+
   const logout = () => {
     localStorage.removeItem('noox_token');
     setUser(null);
@@ -252,6 +301,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     loginWithFace,
     requestEmailOtp,
     loginWithEmailOtp,
+    pendingVerification,
+    resendVerificationCode,
+    cancelVerification,
     register,
     logout,
     refreshProfile,

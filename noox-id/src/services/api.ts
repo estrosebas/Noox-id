@@ -36,6 +36,7 @@ export const API_CONFIG = {
     // Código de un solo uso por correo (alternativa al rostro)
     OTP_LOGIN_REQUEST: '/api/otp/login/request',
     OTP_LOGIN_VERIFY: '/api/otp/login/verify',
+    OTP_REGISTER_RESEND: '/api/otp/register/resend',
 
     // TOTP (segundo factor)
     TOTP_STATUS: '/api/totp/status',
@@ -103,6 +104,9 @@ export interface ApiResponse<T = any> {
   verification?: FaceComparison;
   total?: number;
   pages?: number;
+  /** Registro: la cuenta existe pero falta verificar el correo con el código enviado. */
+  verification_required?: boolean;
+  verification_sent?: boolean;
   current_page?: number;
 }
 

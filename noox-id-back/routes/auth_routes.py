@@ -5,22 +5,37 @@ import jwt
 from datetime import datetime, timedelta
 from config import Config
 import google_auth_service
+import mailer
+import email_otp_service
+from models import db, User
 
 auth_bp = Blueprint('auth', __name__)
 face_service = FaceRecognitionService()
 
 @auth_bp.route('/register', methods=['POST'])
 def register():
-    """Registrar nuevo usuario"""
+    """Registrar nuevo usuario. Envía un código por correo para verificar el correo; hasta entonces la cuenta no
+    puede iniciar sesión."""
     try:
         data = request.get_json()
-        
+
         # Validar campos requeridos
         required_fields = ['firstname', 'lastname', 'email', 'password']
         for field in required_fields:
             if field not in data or not data[field]:
                 return jsonify({'success': False, 'message': f'Campo {field} requerido'}), 400
-        
+
+        if not mailer.is_configured():
+            return jsonify({'success': False,
+                            'message': 'El envío de correo no está configurado: no se puede verificar el correo'}), 503
+
+        # Si el correo ya está registrado pero nunca se verificó, quien se registra ahora lo reemplaza: así nadie
+        # puede "reservar" el correo de otra persona con su propia contraseña o rostro.
+        existente = UserCRUD.get_user_by_email(data['email'])
+        pendiente = existente['user_obj'] if existente['success'] else None
+        if pendiente and (pendiente.verified or pendiente.googleid):
+            return jsonify({'success': False, 'message': 'Email ya existe o error de integridad'}), 400
+
         # Procesar imagen de perfil si se proporciona
         if 'base64imageprofile' in data and data['base64imageprofile']:
             face_result = face_service.process_user_profile_image(data['base64imageprofile'])
@@ -28,15 +43,35 @@ def register():
                 data['base64vector'] = face_result['base64vector']
             else:
                 return jsonify({'success': False, 'message': face_result['message']}), 400
-        
-        # Crear usuario
-        result = UserCRUD.create_user(data)
-        
-        if result['success']:
-            return jsonify(result), 201
+
+        # Crear usuario (o reemplazar los datos de un registro pendiente)
+        if pendiente:
+            result = UserCRUD.update_user(pendiente.id, {
+                'firstname': data['firstname'],
+                'lastname': data['lastname'],
+                'password': data['password'],
+                'base64imageprofile': data.get('base64imageprofile'),
+                'base64vector': data.get('base64vector'),
+            })
         else:
+            result = UserCRUD.create_user(data)
+
+        if not result['success']:
             return jsonify(result), 400
-            
+
+        user = UserCRUD.get_user_by_email(data['email'])['user_obj']
+        enviado = True
+        try:
+            email_otp_service.issue(user, purpose='register')
+        except (email_otp_service.OtpRateLimited, mailer.MailError):
+            enviado = False   # la cuenta queda creada; el usuario puede pedir el reenvío
+
+        result['verification_required'] = True
+        result['verification_sent'] = enviado
+        result['message'] = ('Cuenta creada. Te enviamos un código para verificar tu correo.' if enviado
+                             else 'Cuenta creada, pero no pudimos enviar el código. Pide el reenvío.')
+        return jsonify(result), 201
+
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
 
@@ -51,6 +86,10 @@ def login():
         
         # Verificar credenciales
         result = UserCRUD.verify_password(data['email'], data['password'])
+        
+        if result['success'] and not result['user'].get('verified'):
+            return jsonify({'success': False, 'code': 'EMAIL_NOT_VERIFIED',
+                            'message': 'Verifica tu correo para poder iniciar sesión'}), 403
         
         if result['success']:
             # Generar JWT token
@@ -89,6 +128,10 @@ def face_login():
             return jsonify({'success': False, 'message': 'Usuario no encontrado'}), 404
         
         user = user_result['user_obj']
+        
+        if not user.verified:
+            return jsonify({'success': False, 'code': 'EMAIL_NOT_VERIFIED',
+                            'message': 'Verifica tu correo para poder iniciar sesión'}), 403
         
         # Verificar si el usuario tiene vector facial
         if not user.base64vector:
@@ -184,6 +227,9 @@ def google_auth():
 
         if user_result['success']:
             user = user_result['user_obj']
+            if not user.verified:
+                email_otp_service.mark_verified(user, 'google')
+                db.session.commit()
             if user.googleid and user.googleid != claims['sub']:
                 return jsonify({'success': False,
                                 'message': 'Esta cuenta está vinculada a otra cuenta de Google'}), 403

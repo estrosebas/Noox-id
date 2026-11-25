@@ -110,6 +110,8 @@ class EmailOtp(db.Model):
     code_hash = db.Column(db.String(64), nullable=False)
     expires_at = db.Column(db.DateTime, nullable=False)
     attempts = db.Column(db.Integer, default=0, nullable=False)
+    # 'register' = enviado al registrarse; 'login' = código de acceso. Decide qué pasa al verificar un correo nuevo.
+    purpose = db.Column(db.String(10), default='login', nullable=False, server_default='login')
     used = db.Column(db.Boolean, default=False, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 

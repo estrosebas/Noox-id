@@ -85,6 +85,10 @@ def verify_user_face():
         
         user = user_result['user_obj']
         
+        if not user.verified:
+            return jsonify({'success': False, 'code': 'EMAIL_NOT_VERIFIED',
+                            'message': 'El usuario no ha verificado su correo'}), 403
+        
         # Verificar si el usuario tiene vector facial
         if not user.base64vector:
             return jsonify({'success': False, 'message': 'Usuario no tiene imagen facial registrada'}), 400

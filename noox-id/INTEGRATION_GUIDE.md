@@ -123,6 +123,21 @@ administración con rostro + TOTP.
 - **Límites conocidos:** no hay códigos de recuperación (si el usuario pierde el teléfono hay que
   reiniciar su TOTP a mano en la base) y `/api/auth/face-login` del propio dashboard no pide TOTP.
 
+#### **Verificación del correo al registrarse**
+Al registrarse, NooxID envía un código de 6 dígitos al correo y la cuenta no puede iniciar sesión hasta
+verificarlo (contraseña, rostro y apps externas devuelven 403 con `code: "EMAIL_NOT_VERIFIED"`).
+
+- `POST /api/auth/register` responde 201 con `verification_required: true` y `verification_sent`. Si el
+  correo no está configurado (`MAIL_*`, ver `.env.example`) responde 503 y no crea la cuenta; en
+  desarrollo usa `MAIL_CONSOLE=true`.
+- El usuario escribe el código en el paso «Verifica tu correo» (`POST /api/otp/login/verify`), que lo
+  verifica y lo deja dentro. Reenvío: `POST /api/otp/register/resend`.
+- **Anti pre-secuestro:** si el correo estaba registrado y sin verificar, quien se registra después lo
+  reemplaza. Y si un correo sin verificar se verifica por otra vía (código de acceso o Google), se borran la
+  contraseña y el rostro guardados antes, porque pudo registrarlos otra persona.
+- **Usuarios que ya existían:** la primera vez que arranca esta versión se marcan como verificados (una sola
+  vez), para no dejarlos fuera.
+
 #### **Código por correo (alternativa al rostro, siempre habilitada)**
 Sin contraseña: el usuario pide un código de 6 dígitos y lo recibe por correo. No se desactiva por app;
 sirve cuando falla la cámara o el rostro no se reconoce.

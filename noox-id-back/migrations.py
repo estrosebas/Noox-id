@@ -15,6 +15,9 @@ NEW_COLUMNS = {
     'apps': {
         'requires_totp': 'BOOLEAN NOT NULL DEFAULT 0',
     },
+    'email_otps': {
+        'purpose': "VARCHAR(10) NOT NULL DEFAULT 'login'",
+    },
 }
 
 
@@ -33,3 +36,15 @@ def ensure_schema(db):
         db.session.commit()
         print('Migración: columnas añadidas ->', ', '.join(added))
     return added
+
+
+def grandfather_existing_users(db, primera_vez):
+    """Una sola vez (al aplicarse por primera vez la verificación de correo): da por verificados a los usuarios que ya
+    existían, para no dejarlos fuera cuando el acceso exija correo verificado. Los registros nuevos sí se verifican."""
+    if not primera_vez:
+        return 0
+    res = db.session.execute(text('UPDATE users SET verified = 1 WHERE verified = 0'))
+    db.session.commit()
+    if res.rowcount:
+        print(f'Migración: {res.rowcount} usuario(s) existentes marcados como verificados')
+    return res.rowcount

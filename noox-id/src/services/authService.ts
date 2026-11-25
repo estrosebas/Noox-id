@@ -93,6 +93,17 @@ export class AuthService {
     return data;
   }
 
+  // Reenvía el código de verificación del registro (la respuesta es la misma exista o no la cuenta)
+  static async resendRegistrationCode(email: string): Promise<ApiResponse> {
+    const response = await fetch(`${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.OTP_REGISTER_RESEND}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email })
+    });
+
+    return handleApiResponse(response);
+  }
+
   // Autenticación con Google: se envía el ID token firmado por Google; el servidor lo verifica
   static async googleAuth(idToken: string): Promise<ApiResponse<{ user: User; token: string }>> {
     const response = await fetch(`${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.AUTH_GOOGLE}`, {
