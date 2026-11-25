@@ -64,6 +64,35 @@ export class AuthService {
     return data;
   }
 
+  // Pide un código de acceso al correo (siempre responde igual, exista o no la cuenta)
+  static async requestEmailOtp(email: string): Promise<ApiResponse> {
+    const response = await fetch(`${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.OTP_LOGIN_REQUEST}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email })
+    });
+
+    return handleApiResponse(response);
+  }
+
+  // Login con el código recibido por correo
+  static async emailOtpLogin(email: string, code: string): Promise<ApiResponse<{ user: User; token: string }>> {
+    const response = await fetch(`${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.OTP_LOGIN_VERIFY}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, code })
+    });
+
+    const data = await handleApiResponse(response);
+
+    if (data.success && data.token) {
+      localStorage.setItem('noox_token', String(data.token));
+      localStorage.setItem('noox_user', JSON.stringify(data.user));
+    }
+
+    return data;
+  }
+
   // Autenticación con Google
   static async googleAuth(googleData: {
     firstname?: string;

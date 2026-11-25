@@ -16,6 +16,8 @@ interface AuthContextType {
     googleid: string;
   }) => Promise<boolean>;
   loginWithFace: (email: string, faceImage: string) => Promise<boolean>;
+  requestEmailOtp: (email: string) => Promise<boolean>;
+  loginWithEmailOtp: (email: string, code: string) => Promise<boolean>;
   register: (userData: {
     firstname: string;
     lastname: string;
@@ -159,6 +161,40 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
+  const requestEmailOtp = async (email: string): Promise<boolean> => {
+    setError(null);
+    try {
+      const response = await AuthService.requestEmailOtp(email);
+      return !!response.success;
+    } catch (error: any) {
+      setError(error.message || 'No se pudo enviar el código');
+      return false;
+    }
+  };
+
+  const loginWithEmailOtp = async (email: string, code: string): Promise<boolean> => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const response = await AuthService.emailOtpLogin(email, code);
+      if (response.success && response.token && response.user) {
+        localStorage.setItem('noox_token', String(response.token));
+        setUser(response.user);
+        setIsLoading(false);
+        return true;
+      } else {
+        setError(response.message || 'Código incorrecto o vencido');
+        setIsLoading(false);
+        return false;
+      }
+    } catch (error: any) {
+      setError(error.message || 'Error de conexión');
+      setIsLoading(false);
+      return false;
+    }
+  };
+
   const register = async (userData: {
     firstname: string;
     lastname: string;
@@ -224,6 +260,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     login,
     loginWithGoogle,
     loginWithFace,
+    requestEmailOtp,
+    loginWithEmailOtp,
     register,
     logout,
     refreshProfile,

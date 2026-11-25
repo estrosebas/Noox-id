@@ -33,6 +33,10 @@ export const API_CONFIG = {
     FACE_TOLERANCE: '/api/face/tolerance',
     FACE_VERIFY_TOTP: '/api/face/verify-totp',
 
+    // Código de un solo uso por correo (alternativa al rostro)
+    OTP_LOGIN_REQUEST: '/api/otp/login/request',
+    OTP_LOGIN_VERIFY: '/api/otp/login/verify',
+
     // TOTP (segundo factor)
     TOTP_STATUS: '/api/totp/status',
     TOTP_SETUP: '/api/totp/setup',

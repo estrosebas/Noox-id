@@ -117,6 +117,26 @@ administración con rostro + TOTP.
 - **Límites conocidos:** no hay códigos de recuperación (si el usuario pierde el teléfono hay que
   reiniciar su TOTP a mano en la base) y `/api/auth/face-login` del propio dashboard no pide TOTP.
 
+#### **Código por correo (alternativa al rostro, siempre habilitada)**
+Sin contraseña: el usuario pide un código de 6 dígitos y lo recibe por correo. No se desactiva por app;
+sirve cuando falla la cámara o el rostro no se reconoce.
+
+- **Configuración (`noox-id-back/.env`, ver `.env.example`):** `MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`,
+  `MAIL_PASSWORD`, `MAIL_FROM`, `MAIL_USE_TLS` (587) o `MAIL_USE_SSL` (465). Para desarrollo,
+  `MAIL_CONSOLE=true` imprime el código en la consola del servidor en vez de enviarlo. Sin correo
+  configurado, los endpoints responden 503.
+- **Panel de NooxID:** pestaña *Código* en la pantalla de acceso (`POST /api/otp/login/request` y
+  `/api/otp/login/verify`, devuelve el JWT).
+- **Apps externas (API key):** `POST /api/otp/request` con `{"user_email"}` y luego `POST /api/otp/verify`
+  con `{"user_email", "code"}`. La respuesta tiene la misma forma que `verify-user` (`authenticated`,
+  `totp_required`, `challenge_token`…), así que una app que exige TOTP sigue con `/api/face/verify-totp`.
+- **Protecciones:** el código se guarda como HMAC (no en claro), vence a los 10 min, sirve una vez, admite 5
+  intentos, hay 60 s entre envíos y 5 envíos por hora, y la solicitud responde igual exista o no el
+  correo. Ajustable con `OTP_EMAIL_*`.
+- **Límite conocido:** un correo no demuestra posesión de un dispositivo y puede interceptarse; NIST
+  SP 800-63B-4 no admite el correo como autenticador fuera de banda. Es una alternativa de acceso, no un
+  sustituto del segundo factor TOTP.
+
 #### **Manejo de Estado**
 - AuthContext global para autenticación
 - Persistencia automática de tokens

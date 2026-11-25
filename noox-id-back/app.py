@@ -40,12 +40,14 @@ def create_app():
     from routes.app_routes import app_bp
     from routes.face_recognition_routes import face_bp
     from routes.totp_routes import totp_bp
+    from routes.otp_routes import otp_bp
 
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
     app.register_blueprint(user_bp, url_prefix='/api/users')
     app.register_blueprint(app_bp, url_prefix='/api/apps')
     app.register_blueprint(face_bp, url_prefix='/api/face')
     app.register_blueprint(totp_bp, url_prefix='/api/totp')
+    app.register_blueprint(otp_bp, url_prefix='/api/otp')
 
     # Crear tablas si no existen y añadir columnas nuevas a las ya existentes (TOTP)
     with app.app_context():

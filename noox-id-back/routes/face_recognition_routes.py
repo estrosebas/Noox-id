@@ -3,6 +3,7 @@ from face_recognition_service import FaceRecognitionService
 from crud import UserCRUD, AppCRUD
 from models import db, User
 import totp_service
+from auth_flow import app_auth_response
 import jwt
 from config import Config
 
@@ -90,32 +91,10 @@ def verify_user_face():
         
         # Verificar rostro
         face_result = face_service.verify_user_face(user.base64vector, data['face_image'])
-        face_ok = bool(face_result.get('verified'))
-        requires_totp = bool(app.get('requires_totp'))
-
-        response = {
-            'success': True,
-            'verification': face_result,
-            'user_id': user.id,
-            'app_id': app['id'],
-            # `authenticated` es lo que debe mirar la app cliente: sin TOTP coincide con el rostro;
-            # con TOTP queda en False hasta canjear el reto en /verify-totp.
-            'authenticated': face_ok and not requires_totp,
-            'requires_totp': requires_totp,
-            'totp_required': False,
-            'totp_setup_required': False,
-        }
-
-        if face_ok and requires_totp:
-            if user.totp_enabled:
-                response['totp_required'] = True
-                response['challenge_token'] = totp_service.create_challenge(user.id, app['id'])
-                response['message'] = 'Rostro verificado. Falta el código del autenticador.'
-            else:
-                response['totp_setup_required'] = True
-                response['message'] = ('Esta aplicación exige el autenticador (TOTP) y el usuario aún no '
-                                       'lo ha configurado en NooxID.')
-
+        # `authenticated` es lo que debe mirar la app cliente (ver auth_flow.app_auth_response)
+        response = app_auth_response(user, app, bool(face_result.get('verified')), 'face')
+        response['verification'] = face_result
+        
         return jsonify(response), 200
 
     except Exception as e:

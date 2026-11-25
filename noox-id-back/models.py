@@ -101,6 +101,18 @@ class UserInApp(db.Model):
             'TokenToAcces': self.TokenToAcces
         }
 
+class EmailOtp(db.Model):
+    """Código de un solo uso enviado por correo (se guarda su hash, no el código)."""
+    __tablename__ = 'email_otps'
+
+    id = db.Column(db.Integer, primary_key=True)
+    id_usuario = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    code_hash = db.Column(db.String(64), nullable=False)
+    expires_at = db.Column(db.DateTime, nullable=False)
+    attempts = db.Column(db.Integer, default=0, nullable=False)
+    used = db.Column(db.Boolean, default=False, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
 class TokenToAccess(db.Model):
     __tablename__ = 'tokentoaccess'
     

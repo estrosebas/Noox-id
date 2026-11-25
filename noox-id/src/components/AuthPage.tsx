@@ -2,13 +2,14 @@ import React, { useState, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Eye, EyeOff, Camera, X, RefreshCw } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import EmailOtpLogin from './EmailOtpLogin';
 
 interface AuthPageProps {
   onBack: () => void;
 }
 
 const AuthPage: React.FC<AuthPageProps> = ({ onBack }) => {
-  const [mode, setMode] = useState<'login' | 'register' | 'face'>('login');
+  const [mode, setMode] = useState<'login' | 'register' | 'face' | 'otp'>('login');
   const [showPassword, setShowPassword] = useState(false);
   const [showFaceCapture, setShowFaceCapture] = useState(false);
   const [cameraState, setCameraState] = useState<'off' | 'starting' | 'ready' | 'error'>('off');
@@ -299,10 +300,10 @@ const AuthPage: React.FC<AuthPageProps> = ({ onBack }) => {
         </motion.div>
         
         <h2 className="auth-title">
-          {mode === 'login' ? 'Iniciar Sesión' : mode === 'register' ? 'Registrarse' : 'Login Facial'}
+          {mode === 'login' ? 'Iniciar Sesión' : mode === 'register' ? 'Registrarse' : mode === 'otp' ? 'Código por correo' : 'Login Facial'}
         </h2>
         <p className="auth-subtitle">
-          {mode === 'login' ? 'Ingresa a tu cuenta' : mode === 'register' ? 'Crea tu nueva cuenta' : 'Usa tu rostro para ingresar'}
+          {mode === 'login' ? 'Ingresa a tu cuenta' : mode === 'register' ? 'Crea tu nueva cuenta' : mode === 'otp' ? 'Entra sin contraseña con un código' : 'Usa tu rostro para ingresar'}
         </p>
 
         {error && (
@@ -347,10 +348,17 @@ const AuthPage: React.FC<AuthPageProps> = ({ onBack }) => {
             >
               Facial
             </button>
+            <button
+              onClick={() => setMode('otp')}
+              className={`btn ${mode === 'otp' ? 'btn-primary' : 'btn-secondary'}`}
+              style={{ flex: 1 }}
+            >
+              Código
+            </button>
           </div>
         </div>
 
-        {mode !== 'face' && (
+        {mode !== 'face' && mode !== 'otp' && (
           <form onSubmit={handleEmailLogin} style={{ width: '100%' }}>
             {mode === 'register' && (
               <>
@@ -472,6 +480,8 @@ const AuthPage: React.FC<AuthPageProps> = ({ onBack }) => {
             </motion.button>
           </form>
         )}
+
+        {mode === 'otp' && <EmailOtpLogin />}
 
         {mode === 'face' && (
           <div style={{ width: '100%' }}>
