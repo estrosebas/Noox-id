@@ -3,8 +3,8 @@
 ## Descripción General
 
 NooxID es una plataforma de autenticación y gestión de usuarios con reconocimiento facial, compuesta por:
-- **Frontend**: SPA en React + TypeScript (carpeta `noox-id`)
-- **Backend**: API REST en Flask + SQLAlchemy + face_recognition (carpeta `noox-id-back`)
+- **Frontend**: SPA en React + TypeScript (carpeta `noox-id`) con MediaPipe para guiar y validar el encuadre de la captura
+- **Backend**: API REST en Flask + SQLAlchemy + OpenCV con YuNet (detección) y SFace (reconocimiento) (carpeta `noox-id-back`)
 
 Permite autenticación tradicional, Google y facial, gestión de usuarios, apps y API keys.
 

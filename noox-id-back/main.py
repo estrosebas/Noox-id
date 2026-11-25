@@ -4,7 +4,7 @@ NooxID - Sistema de autenticación e identificación facial
 Este es un backend desarrollado con Flask y SQLAlchemy que proporciona:
 - Gestión de usuarios con autenticación tradicional y facial
 - Sistema de aplicaciones con API keys
-- Reconocimiento y comparación facial basado en face_recognition
+- Reconocimiento y comparación facial basado en YuNet (detección) + SFace (embeddings) de OpenCV
 - CRUDs completos para todas las entidades
 
 Instalación:

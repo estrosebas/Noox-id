@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify
 from crud import UserCRUD
-from face_recognition_service import FaceRecognitionService
+from face_recognition_service import FaceRecognitionService, FaceError
 import jwt
 from datetime import datetime, timedelta
 from config import Config
@@ -186,7 +186,9 @@ def face_login():
                     'distance': face_result['distance']
                 }
             }), 401
-            
+
+    except FaceError as e:
+        return jsonify({'success': False, 'message': str(e)}), 400
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
 

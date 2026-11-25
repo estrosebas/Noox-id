@@ -1,31 +1,23 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Camera, Upload, RefreshCw, Check, X, Eye, Settings, StopCircle } from 'lucide-react';
+import FaceCamera from '../FaceCamera';
 import { useAuth } from '../../contexts/AuthContext';
 import { FaceService, ImageUtils } from '../../services/faceService';
 
 const FaceSection: React.FC = () => {
   const [isUploading, setIsUploading] = useState(false);
-  const [cameraState, setCameraState] = useState<'off' | 'starting' | 'ready' | 'error'>('off');
+  const [showCamera, setShowCamera] = useState(false);
   const [uploadResult, setUploadResult] = useState<any>(null);
   const [verificationResult, setVerificationResult] = useState<any>(null);
   const [isVerifying, setIsVerifying] = useState(false);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
-  const [tolerance, setTolerance] = useState(0.6);
-  const [cameraError, setCameraError] = useState<string | null>(null);
+  // Umbral mínimo de similitud coseno (SFace): más alto = más estricto.
+  const [tolerance, setTolerance] = useState(0.363);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
   
   const { user, refreshProfile, loginWithFace } = useAuth();
-
-  // Limpiar cámara al desmontar el componente
-  useEffect(() => {
-    return () => {
-      stopCamera();
-    };
-  }, []);
 
   // Cargar tolerancia al montar
   useEffect(() => {
@@ -48,7 +40,6 @@ const FaceSection: React.FC = () => {
 
     setIsUploading(true);
     setUploadResult(null);
-    setCameraError(null);
 
     try {
       // Redimensionar y optimizar la imagen
@@ -73,145 +64,26 @@ const FaceSection: React.FC = () => {
     }
   };
 
-  const startCamera = async () => {
+  // FaceCamera ya validó el encuadre en el navegador (MediaPipe);
+  // el backend (YuNet + SFace) extrae y guarda el vector facial.
+  const handleCameraCapture = async (photo: string) => {
+    setShowCamera(false);
+    setPreviewImage(photo);
+    setUploadResult(null);
+    setVerificationResult(null);
+    setIsUploading(true);
     try {
-      console.log('📹 Iniciando cámara...');
-      setCameraState('starting');
-      setCameraError(null);
-      
-      // Verificar si el navegador soporta getUserMedia
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        throw new Error('Tu navegador no soporta acceso a la cámara');
-      }
-      
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { 
-          width: { ideal: 640 },
-          height: { ideal: 480 },
-          facingMode: 'user'
-        } 
-      });
-      
-      console.log('✅ Stream de cámara obtenido');
-      
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        
-        // Función que se ejecuta cuando el video está listo
-        const handleVideoReady = () => {
-          console.log('🎬 Video ready! Setting camera state to ready');
-          setCameraState('ready');
-        };
-        
-        // Múltiples eventos para detectar cuando está listo
-        videoRef.current.onloadedmetadata = handleVideoReady;
-        videoRef.current.oncanplay = handleVideoReady;
-        videoRef.current.onplaying = handleVideoReady;
-        
-        // Error handler
-        videoRef.current.onerror = (e) => {
-          console.error('❌ Error en el elemento video:', e);
-          setCameraError('Error al cargar el video');
-          setCameraState('error');
-        };
-        
-        try {
-          await videoRef.current.play();
-          console.log('✅ Video en reproducción');
-          
-          // Fallback más robusto
-          setTimeout(() => {
-            if (videoRef.current && videoRef.current.videoWidth > 0 && videoRef.current.videoHeight > 0) {
-              console.log('⏰ Fallback: Video has dimensions, setting to ready');
-              setCameraState('ready');
-            }
-          }, 1000);
-          
-        } catch (playError) {
-          console.error('❌ Error al reproducir video:', playError);
-          // Reintentar reproducción
-          setTimeout(() => {
-            if (videoRef.current) {
-              videoRef.current.play().catch(console.error);
-            }
-          }, 100);
-        }
-      }
-    } catch (error) {
-      console.error('💥 Error accessing camera:', error);
-      setCameraState('error');
-      setCameraError(
-        error instanceof Error 
-          ? `Error al acceder a la cámara: ${error.message}` 
-          : 'No se pudo acceder a la cámara. Verifica los permisos.'
-      );
-    }
-  };
-
-  const capturePhoto = async () => {
-    if (!videoRef.current || !canvasRef.current || cameraState !== 'ready') return;
-
-    try {
-      const canvas = canvasRef.current;
-      const video = videoRef.current;
-      const context = canvas.getContext('2d');
-
-      if (!context) {
-        throw new Error('No se pudo obtener el contexto del canvas');
-      }
-
-      // Configurar canvas con las dimensiones del video
-      canvas.width = video.videoWidth || 640;
-      canvas.height = video.videoHeight || 480;
-      
-      // Dibujar el frame actual del video
-      context.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-      // Convertir a base64 con calidad optimizada
-      const base64String = ImageUtils.canvasToBase64(canvas, 0.8);
-      setPreviewImage(base64String);
-
-      // Detener la cámara
-      stopCamera();
-
-      // Procesar la imagen capturada
-      setIsUploading(true);
-      const response = await FaceService.processProfileImage(base64String);
+      const response = await FaceService.processProfileImage(photo);
       setUploadResult(response);
-      
-      if (response.success) {
-        await refreshProfile();
-      }
+      if (response.success) await refreshProfile();
     } catch (error) {
-      console.error('Error capturing photo:', error);
-      setUploadResult({ 
-        success: false, 
-        message: error instanceof Error ? error.message : 'Error al capturar la imagen' 
+      setUploadResult({
+        success: false,
+        message: error instanceof Error ? error.message : 'Error al procesar la imagen'
       });
     } finally {
       setIsUploading(false);
     }
-  };
-
-  const stopCamera = () => {
-    console.log('🛑 Deteniendo cámara...');
-    if (videoRef.current && videoRef.current.srcObject) {
-      const stream = videoRef.current.srcObject as MediaStream;
-      stream.getTracks().forEach(track => {
-        console.log('⏹️ Deteniendo track:', track.kind);
-        track.stop();
-      });
-      videoRef.current.srcObject = null;
-      
-      // Limpiar event listeners
-      videoRef.current.onloadedmetadata = null;
-      videoRef.current.oncanplay = null;
-      videoRef.current.onplaying = null;
-      videoRef.current.onerror = null;
-    }
-    setCameraState('off');
-    setCameraError(null);
-    console.log('✅ Cámara detenida');
   };
 
   const handleVerifyFace = async () => {
@@ -324,20 +196,12 @@ const FaceSection: React.FC = () => {
           </motion.button>
           <motion.button
             className="btn btn-primary"
-            onClick={cameraState === 'off' ? startCamera : stopCamera}
-            disabled={cameraState === 'starting'}
+            onClick={() => setShowCamera(v => !v)}
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
           >
-            {cameraState === 'starting' ? (
-              <RefreshCw size={20} className="animate-spin" />
-            ) : cameraState === 'ready' ? (
-              <StopCircle size={20} />
-            ) : (
-              <Camera size={20} />
-            )}
-            {cameraState === 'starting' ? 'Iniciando...' : 
-             cameraState === 'ready' ? 'Detener Cámara' : 'Usar Cámara'}
+            {showCamera ? <StopCircle size={20} /> : <Camera size={20} />}
+            {showCamera ? 'Detener Cámara' : 'Usar Cámara'}
           </motion.button>
         </div>
       </div>
@@ -359,27 +223,27 @@ const FaceSection: React.FC = () => {
       >
         <h3 style={{ fontSize: '18px', fontWeight: '600', color: '#ffffff', marginBottom: '16px' }}>
           <Settings size={20} style={{ display: 'inline', marginRight: '8px' }} />
-          Configuración de Tolerancia
+          Umbral de Similitud (SFace)
         </h3>
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
           <label style={{ color: '#e0e0e0', fontSize: '14px', minWidth: '100px' }}>
-            Tolerancia: {tolerance.toFixed(2)}
+            Umbral: {tolerance.toFixed(2)}
           </label>
           <input
             type="range"
-            min="0.3"
-            max="1.0"
-            step="0.05"
+            min="0.2"
+            max="0.8"
+            step="0.01"
             value={tolerance}
             onChange={(e) => handleToleranceChange(parseFloat(e.target.value))}
             style={{ flex: 1 }}
           />
           <span style={{ color: '#9aa0a6', fontSize: '12px', minWidth: '150px' }}>
-            {tolerance < 0.5 ? 'Muy estricto' : tolerance < 0.7 ? 'Equilibrado' : 'Permisivo'}
+            {tolerance < 0.3 ? 'Permisivo' : tolerance < 0.45 ? 'Equilibrado' : 'Muy estricto'}
           </span>
         </div>
         <p style={{ color: '#9aa0a6', fontSize: '12px', marginTop: '8px' }}>
-          Una tolerancia menor significa verificaciones más estrictas. Recomendado: 0.6
+          Un umbral mayor exige mayor parecido (más estricto). Valor recomendado por OpenCV para SFace: 0.363
         </p>
       </motion.div>
 
@@ -396,166 +260,35 @@ const FaceSection: React.FC = () => {
             Captura de Imagen
           </h3>
           
-          <div style={{ 
-            width: '100%', 
-            height: '300px', 
-            backgroundColor: '#1f2937', 
-            borderRadius: '12px',
-            border: '2px dashed #374151',
-            marginBottom: '16px',
-            overflow: 'hidden',
-            position: 'relative'
-          }}>
-            {/* Contenedor del video - siempre presente */}
-            <div style={{ position: 'relative', width: '100%', height: '100%' }}>
-              {/* Video siempre renderizado */}
-              <video
-                ref={videoRef}
-                style={{ 
-                  width: '100%', 
-                  height: '100%', 
-                  objectFit: 'cover',
-                  visibility: cameraState === 'ready' ? 'visible' : 'hidden'
-                }}
-                autoPlay
-                muted
-                playsInline
-              />
-              <canvas ref={canvasRef} style={{ display: 'none' }} />
-              
-              {/* Botón de captura - solo visible cuando la cámara está lista */}
-              {cameraState === 'ready' && (
-                <motion.button
-                  onClick={capturePhoto}
-                  className="btn btn-primary"
-                  style={{ 
-                    position: 'absolute', 
-                    bottom: '16px', 
-                    left: '50%', 
-                    transform: 'translateX(-50%)',
-                    padding: '12px 24px',
-                    fontSize: '16px',
-                    fontWeight: '600',
-                    zIndex: 10
-                  }}
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                >
-                  <Camera size={24} />
-                  Capturar Foto
-                </motion.button>
-              )}
-              
-              {/* Overlay de carga */}
-              {cameraState === 'starting' && (
-                <div style={{ 
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  backgroundColor: '#1f2937',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  textAlign: 'center',
-                  color: '#9aa0a6'
-                }}>
-                  <div>
-                    <motion.div
-                      style={{ 
-                        width: '48px', 
-                        height: '48px', 
-                        border: '4px solid #374151', 
-                        borderTop: '4px solid #4285f4', 
-                        borderRadius: '50%',
-                        margin: '0 auto 16px'
-                      }}
-                      animate={{ rotate: 360 }}
-                      transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                    />
-                    <p>Iniciando cámara...</p>
-                  </div>
-                </div>
-              )}
-              
-              {/* Overlay de error */}
-              {cameraState === 'error' && (
-                <div style={{ 
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  backgroundColor: '#1f2937',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  textAlign: 'center',
-                  color: '#ef4444'
-                }}>
-                  <div>
-                    <X size={48} style={{ marginBottom: '16px' }} />
-                    <p>Error al acceder a la cámara</p>
-                    {cameraError && (
-                      <p style={{ fontSize: '12px', marginTop: '8px' }}>{cameraError}</p>
-                    )}
-                    <motion.button
-                      onClick={startCamera}
-                      className="btn btn-secondary"
-                      style={{ marginTop: '12px' }}
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                    >
-                      <RefreshCw size={16} />
-                      Reintentar
-                    </motion.button>
-                  </div>
-                </div>
-              )}
-              
-              {/* Overlay de imagen preview */}
-              {previewImage && cameraState === 'off' && (
-                <div style={{ 
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  bottom: 0
-                }}>
-                  <img
-                    src={previewImage}
-                    alt="Preview"
-                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                  />
-                </div>
-              )}
-              
-              {/* Estado por defecto */}
-              {cameraState === 'off' && !previewImage && (
-                <div style={{ 
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  backgroundColor: '#1f2937',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  textAlign: 'center',
-                  color: '#9aa0a6'
-                }}>
-                  <div>
-                    <Camera size={48} style={{ marginBottom: '16px' }} />
-                    <p>Usa la cámara o sube una imagen</p>
-                  </div>
+          {showCamera ? (
+            <FaceCamera onCapture={handleCameraCapture} busy={isUploading} />
+          ) : (
+            <div style={{
+              width: '100%',
+              height: '300px',
+              backgroundColor: '#1f2937',
+              borderRadius: '12px',
+              border: '2px dashed #374151',
+              marginBottom: '16px',
+              overflow: 'hidden',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              textAlign: 'center',
+              color: '#9aa0a6'
+            }}>
+              {previewImage ? (
+                <img src={previewImage} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              ) : (
+                <div>
+                  <Camera size={48} style={{ marginBottom: '16px' }} />
+                  <p>Usa la cámara o sube una imagen</p>
                 </div>
               )}
             </div>
-          </div>
+          )}
 
-          {previewImage && cameraState === 'off' && (
+          {previewImage && !showCamera && (
             <div style={{ display: 'flex', gap: '10px' }}>
               <motion.button
                 onClick={handleVerifyFace}
