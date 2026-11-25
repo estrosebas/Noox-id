@@ -138,12 +138,13 @@ def clear_failures(user_id):
 
 
 # ------------------------------------------------------------------ reto entre rostro y TOTP
-def create_challenge(user_id, app_id):
+def create_challenge(user_id, app_id, method=None):
     """Token corto que prueba que el usuario ya pasó el rostro en esta app; se canjea con el código TOTP."""
     payload = {
         'purpose': CHALLENGE_PURPOSE,
         'user_id': user_id,
         'app_id': app_id,
+        'method': method,   # con qué pasó el primer factor (para el aviso de acceso)
         'exp': datetime.utcnow() + timedelta(minutes=CHALLENGE_MINUTES),
     }
     return jwt.encode(payload, Config.SECRET_KEY, algorithm='HS256')

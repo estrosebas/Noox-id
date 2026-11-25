@@ -80,6 +80,9 @@ class Config:
     # Inicio de sesión con Google: ID de cliente OAuth (sin él, /api/auth/google-auth queda deshabilitado)
     GOOGLE_CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID', '')
 
+    # Aviso por correo al dueño de la cuenta cada vez que accede a una aplicación (false lo desactiva)
+    ACCESS_NOTIFY = _booleano('ACCESS_NOTIFY', True)
+
     # Código de un solo uso por correo
     OTP_EMAIL_TTL_MINUTES = int(os.environ.get('OTP_EMAIL_TTL_MINUTES', '10'))
     OTP_EMAIL_MAX_ATTEMPTS = int(os.environ.get('OTP_EMAIL_MAX_ATTEMPTS', '5'))

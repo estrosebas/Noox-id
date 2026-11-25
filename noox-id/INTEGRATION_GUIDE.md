@@ -220,6 +220,18 @@ sirve cuando falla la cámara o el rostro no se reconoce.
   SP 800-63B-4 no admite el correo como autenticador fuera de banda. Es una alternativa de acceso, no un
   sustituto del segundo factor TOTP.
 
+#### **Aviso de acceso por correo**
+Cada vez que un usuario **accede a una aplicación** a través de NooxID, recibe un correo con el nombre de la app, el
+método (rostro o código por correo, y TOTP si la app lo exige) y la hora (UTC). La app se identifica por su API key
+(`X-API-Key` + `X-App-ID`), así que el aviso dice a cuál se entró.
+
+- Se envía solo cuando el acceso se concede: tras el primer factor en apps sin TOTP, y tras canjear el TOTP en las que
+  lo exigen. Un intento fallido no genera aviso.
+- Va en un hilo aparte: si el correo falla, el acceso no se ve afectado (solo se registra el error).
+- No impide un acceso ajeno, pero permite que el dueño de la cuenta lo detecte, lo que compensa que el código por
+  correo deje entrar a las apps sin TOTP a quien controle la bandeja.
+- Se desactiva con `ACCESS_NOTIFY=false` en el `.env`.
+
 #### **Manejo de Estado**
 - AuthContext global para autenticación
 - Persistencia automática de tokens

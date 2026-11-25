@@ -5,7 +5,7 @@ from models import db, User, App
 import throttle
 from permissions import has_permission
 import totp_service
-from auth_flow import app_auth_response, is_member
+from auth_flow import app_auth_response, avisar_acceso, is_member
 import jwt
 from config import Config
 
@@ -165,6 +165,7 @@ def verify_totp():
         totp_service.clear_failures(user.id)
         user.totp_last_step = step
         db.session.commit()
+        avisar_acceso(user, app['name_app'], challenge.get('method'), True)
 
         return jsonify({
             'success': True,
