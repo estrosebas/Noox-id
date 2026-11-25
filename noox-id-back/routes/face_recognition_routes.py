@@ -1,9 +1,11 @@
 from flask import Blueprint, request, jsonify
 from face_recognition_service import FaceRecognitionService
 from crud import UserCRUD, AppCRUD
-from models import db, User
+from models import db, User, App
+import throttle
+from permissions import is_admin
 import totp_service
-from auth_flow import app_auth_response
+from auth_flow import app_auth_response, is_member
 import jwt
 from config import Config
 
@@ -11,30 +13,23 @@ face_bp = Blueprint('face', __name__)
 face_service = FaceRecognitionService()
 
 def verify_api_key():
-    """Verificar API key en las cabeceras"""
+    """Verificar API key en las cabeceras (la clave se compara contra su hash; ver models.App)"""
     api_key = request.headers.get('X-API-Key')
-    if not api_key:
-        return None, jsonify({'success': False, 'message': 'API Key requerida'}), 401
-    
-    # Buscar la aplicación por API key
-    # En una implementación real, podrías tener un índice para esto
-    # Por ahora, simplificamos asumiendo que se pasa el app_id también
     app_id = request.headers.get('X-App-ID')
-    if not app_id:
-        return None, jsonify({'success': False, 'message': 'App ID requerido'}), 401
-    
+    if not api_key or not app_id:
+        return None, jsonify({'success': False, 'message': 'API Key y App ID requeridos'}), 401
+
     try:
-        app_result = AppCRUD.get_app_by_id(int(app_id))
-        if not app_result['success']:
-            return None, jsonify({'success': False, 'message': 'Aplicación no encontrada'}), 404
-        
-        if app_result['app']['api_key'] != api_key:
+        app_row = App.query.get(int(app_id))
+        # misma respuesta para app inexistente y clave incorrecta: no se revela qué apps existen
+        if not app_row or not app_row.check_api_key(api_key):
             return None, jsonify({'success': False, 'message': 'API Key inválida'}), 401
-        
-        return app_result['app'], None, None
-        
+        return app_row.to_dict(), None, None
+    except ValueError:
+        return None, jsonify({'success': False, 'message': 'App ID inválido'}), 401
     except Exception as e:
         return None, jsonify({'success': False, 'message': str(e)}), 500
+
 
 @face_bp.route('/compare', methods=['POST'])
 def compare_faces():
@@ -85,9 +80,19 @@ def verify_user_face():
         
         user = user_result['user_obj']
         
+        clave_intentos = f"vu:{app['id']}:{data['user_email'].lower()}"
+        espera = throttle.FACE.locked(clave_intentos)
+        if espera:
+            return jsonify({'success': False, 'retry_after': espera,
+                            'message': f'Demasiados intentos fallidos. Espera {espera} s.'}), 429
+        
         if not user.verified:
             return jsonify({'success': False, 'code': 'EMAIL_NOT_VERIFIED',
                             'message': 'El usuario no ha verificado su correo'}), 403
+        
+        if not is_member(user.id, app['id']):
+            return jsonify({'success': False, 'code': 'NOT_A_MEMBER',
+                            'message': 'El usuario no está registrado en esta aplicación'}), 403
         
         # Verificar si el usuario tiene vector facial
         if not user.base64vector:
@@ -95,6 +100,7 @@ def verify_user_face():
         
         # Verificar rostro
         face_result = face_service.verify_user_face(user.base64vector, data['face_image'])
+        (throttle.FACE.reset if face_result.get('verified') else throttle.FACE.fail)(clave_intentos)
         # `authenticated` es lo que debe mirar la app cliente (ver auth_flow.app_auth_response)
         response = app_auth_response(user, app, bool(face_result.get('verified')), 'face')
         response['verification'] = face_result
@@ -313,6 +319,8 @@ def manage_tolerance():
             }), 200
         
         elif request.method == 'POST':
+            if not is_admin(request.current_user_id):
+                return jsonify({'success': False, 'message': 'Solo un administrador puede cambiar el umbral'}), 403
             data = request.get_json()
             tolerance = data.get('tolerance')
             

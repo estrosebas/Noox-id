@@ -11,7 +11,7 @@ from flask import Blueprint, request, jsonify
 
 import mailer
 import email_otp_service as otp
-from auth_flow import app_auth_response
+from auth_flow import app_auth_response, is_member
 from config import Config
 from models import User
 from routes.face_recognition_routes import verify_api_key
@@ -21,9 +21,11 @@ otp_bp = Blueprint('otp', __name__)
 GENERIC_SENT = 'Si el correo está registrado, enviamos un código. Revisa tu bandeja.'
 
 
-def _send_code(email, app_name=None, purpose='login'):
+def _send_code(email, app_name=None, purpose='login', app_id=None):
     """Envía el código sin revelar si el correo existe. Devuelve (respuesta, estado)."""
     user = User.query.filter_by(email=email).first()
+    if app_id is not None and user and not is_member(user.id, app_id):
+        user = None   # no es de esta app: no se envía nada (y no se revela)
     if purpose == 'register' and user and user.verified:
         user = None   # ya verificado: no hay nada que reenviar (y no se revela)
     if not mailer.is_configured():
@@ -49,7 +51,7 @@ def request_code():
     data = request.get_json(silent=True) or {}
     if not data.get('user_email'):
         return jsonify({'success': False, 'message': 'user_email requerido'}), 400
-    return _send_code(data['user_email'], app['name_app'])
+    return _send_code(data['user_email'], app['name_app'], app_id=app['id'])
 
 
 @otp_bp.route('/verify', methods=['POST'])
@@ -62,7 +64,7 @@ def verify_code():
         return jsonify({'success': False, 'message': 'user_email y code requeridos'}), 400
 
     user = User.query.filter_by(email=data['user_email']).first()
-    ok = bool(user) and otp.verify(user, data['code'])
+    ok = bool(user) and is_member(user.id, app['id']) and otp.verify(user, data['code'])
     if not ok:
         return jsonify({'success': False, 'authenticated': False,
                         'message': 'Código incorrecto o vencido'}), 401

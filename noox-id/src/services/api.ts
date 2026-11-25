@@ -66,13 +66,24 @@ export interface App {
   id: number;
   name_app: string;
   owner: number;
-  api_key: string;
+  /** Solo viene al crear la app o regenerar la clave; después el servidor guarda únicamente su hash. */
+  api_key?: string;
+  api_key_prefix?: string;
   last_edit?: string;
   created_at?: string;
   is_verified: boolean;
   IconAppPath?: string;
   /** Si es true, tras el rostro se exige un código del autenticador (TOTP). */
   requires_totp?: boolean;
+}
+
+export interface AppUser {
+  id: number;
+  id_usuario: number;
+  id_app: number;
+  status: 'enable' | 'disable';
+  email?: string | null;
+  name?: string | null;
 }
 
 export interface Token {
@@ -98,6 +109,7 @@ export interface ApiResponse<T = any> {
   users?: User[];
   app?: App;
   apps?: App[];
+  app_users?: AppUser[];
   token?: Token;
   tokens?: Token[];
   comparison?: FaceComparison;

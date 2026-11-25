@@ -1,5 +1,6 @@
 from flask import Blueprint, request, jsonify
 from crud import AppCRUD, UserInAppCRUD, TokenToAccessCRUD
+from models import User
 import jwt
 from config import Config
 
@@ -173,11 +174,17 @@ def add_user_to_app(app_id):
         
         data = request.get_json()
         
-        if not data.get('id_usuario'):
-            return jsonify({'success': False, 'message': 'ID de usuario requerido'}), 400
+        id_usuario = data.get('id_usuario')
+        if not id_usuario and data.get('email'):
+            usuario = User.query.filter_by(email=data['email']).first()
+            if not usuario:
+                return jsonify({'success': False, 'message': 'No existe un usuario con ese correo'}), 404
+            id_usuario = usuario.id
+        if not id_usuario:
+            return jsonify({'success': False, 'message': 'ID de usuario o correo requerido'}), 400
         
         user_app_data = {
-            'id_usuario': data['id_usuario'],
+            'id_usuario': id_usuario,
             'id_app': app_id,
             'status': data.get('status', 'enable'),
             'TokenToAcces': data.get('TokenToAcces')
@@ -206,6 +213,11 @@ def get_app_users(app_id):
         per_page = request.args.get('per_page', 10, type=int)
         
         result = UserInAppCRUD.get_app_users(app_id, page=page, per_page=per_page)
+        if result['success']:
+            for item in result['app_users']:
+                usuario = User.query.get(item['id_usuario'])
+                item['email'] = usuario.email if usuario else None
+                item['name'] = f'{usuario.firstname} {usuario.lastname}'.strip() if usuario else None
         return jsonify(result), 200 if result['success'] else 400
         
     except Exception as e:

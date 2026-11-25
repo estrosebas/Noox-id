@@ -52,10 +52,11 @@ def create_app():
     # Crear tablas si no existen y añadir columnas nuevas a las ya existentes (TOTP)
     with app.app_context():
         from sqlalchemy import inspect
-        from migrations import ensure_schema, grandfather_existing_users
+        from migrations import ensure_schema, grandfather_existing_users, hash_existing_api_keys
         tabla_otp_existia = inspect(db.engine).has_table('email_otps')
         db.create_all()
         agregadas = ensure_schema(db)
+        hash_existing_api_keys(db)
         # primera vez que se aplica la verificación de correo: tabla nueva o columna `purpose` recién añadida
         grandfather_existing_users(db, (not tabla_otp_existia) or 'email_otps.purpose' in agregadas)
     
@@ -71,4 +72,4 @@ def create_app():
 
 if __name__ == '__main__':
     app = create_app()
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(debug=Config.DEBUG, host=Config.HOST, port=Config.PORT)

@@ -1,5 +1,11 @@
 """Respuesta común a las apps cliente después del primer factor (rostro o código por correo)."""
 import totp_service
+from models import UserInApp
+
+
+def is_member(user_id, app_id):
+    """El usuario debe estar registrado y habilitado en la aplicación para autenticarse en ella."""
+    return UserInApp.query.filter_by(id_usuario=user_id, id_app=app_id, status='enable').first() is not None
 
 
 def app_auth_response(user, app, factor_ok, method):

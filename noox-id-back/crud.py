@@ -155,7 +155,9 @@ class AppCRUD:
 
             db.session.add(app)
             db.session.commit()
-            return {'success': True, 'app': app.to_dict(), 'message': 'Aplicación creada exitosamente'}
+            datos = app.to_dict()
+            datos['api_key'] = app.plain_api_key   # única vez que se entrega el texto de la clave
+            return {'success': True, 'app': datos, 'message': 'Aplicación creada exitosamente'}
             
         except Exception as e:
             db.session.rollback()
@@ -251,10 +253,12 @@ class AppCRUD:
             if not app:
                 return {'success': False, 'message': 'Aplicación no encontrada'}
             
-            app.api_key = app.generate_api_key()
+            clave = app.set_new_api_key()
             app.last_edit = datetime.utcnow()
             db.session.commit()
-            return {'success': True, 'app': app.to_dict(), 'message': 'API key regenerada exitosamente'}
+            datos = app.to_dict()
+            datos['api_key'] = clave   # única vez que se entrega el texto de la clave
+            return {'success': True, 'app': datos, 'message': 'API key regenerada exitosamente'}
             
         except Exception as e:
             db.session.rollback()
@@ -265,6 +269,8 @@ class UserInAppCRUD:
     def create_user_in_app(data):
         """Crear relación usuario-aplicación"""
         try:
+            if UserInApp.query.filter_by(id_usuario=data['id_usuario'], id_app=data['id_app']).first():
+                return {'success': False, 'message': 'El usuario ya está registrado en esta aplicación'}
             user_in_app = UserInApp(
                 id_usuario=data['id_usuario'],
                 id_app=data['id_app'],

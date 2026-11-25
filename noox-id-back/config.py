@@ -1,10 +1,59 @@
 import os
+import secrets
+import sys
+from pathlib import Path
+
 from dotenv import load_dotenv
 
 load_dotenv()
 
+
+def _clave_secreta():
+    """SECRET_KEY del entorno o, si falta, una clave aleatoria guardada en instance/secret_key (fuera de git).
+
+    Nunca se usa un valor por defecto público: con él cualquiera podría forjar JWT y descifrar los secretos TOTP.
+    Se persiste en un archivo para que no cambie en cada reinicio (si cambiara, caducarían las sesiones y los
+    secretos TOTP guardados quedarían ilegibles). En producción define SECRET_KEY en el entorno.
+    """
+    clave = os.environ.get('SECRET_KEY')
+    if clave:
+        return clave
+    ruta = Path(__file__).resolve().parent / 'instance' / 'secret_key'
+    if ruta.exists():
+        return ruta.read_text(encoding='utf-8').strip()
+    ruta.parent.mkdir(exist_ok=True)
+    clave = secrets.token_hex(32)
+    ruta.write_text(clave, encoding='utf-8')
+    try:
+        os.chmod(ruta, 0o600)
+    except OSError:
+        pass
+    print(f'[NooxID] SECRET_KEY no definida: se generó una clave aleatoria en {ruta}. '
+          'En producción defínela en el entorno.', file=sys.stderr)
+    return clave
+
+
+def _booleano(nombre, defecto=False):
+    return os.environ.get(nombre, str(defecto)).strip().lower() in ('1', 'true', 'yes', 'si', 'sí')
+
+
+# Servidor de desarrollo: sin depurador salvo que se pida, y el depurador solo en loopback
+# (con host 0.0.0.0 el depurador de Werkzeug permite ejecutar código desde la red).
+_DEBUG = _booleano('FLASK_DEBUG')
+_HOST = os.environ.get('HOST', '127.0.0.1')
+if _DEBUG and _HOST not in ('127.0.0.1', 'localhost', '::1'):
+    print('[NooxID] FLASK_DEBUG solo se permite en loopback: se usa HOST=127.0.0.1.', file=sys.stderr)
+    _HOST = '127.0.0.1'
+
 class Config:
-    SECRET_KEY = os.environ.get('SECRET_KEY') or 'dev-secret-key-change-in-production'
+    SECRET_KEY = _clave_secreta()
+
+    DEBUG = _DEBUG
+    HOST = _HOST
+    PORT = int(os.environ.get('PORT', '5000'))
+
+    # Correos (separados por coma) con permisos de administrador: umbral facial y listado de usuarios
+    ADMIN_EMAILS = {e.strip().lower() for e in os.environ.get('ADMIN_EMAILS', '').split(',') if e.strip()}
     SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or 'mysql+pymysql://root:password@localhost/nooxid'
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     

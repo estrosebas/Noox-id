@@ -5,6 +5,7 @@ import jwt
 from datetime import datetime, timedelta
 from config import Config
 import google_auth_service
+import throttle
 import mailer
 import email_otp_service
 from models import db, User
@@ -85,7 +86,14 @@ def login():
             return jsonify({'success': False, 'message': 'Email y contraseña requeridos'}), 400
         
         # Verificar credenciales
+        clave_intentos = f"login:{data['email'].lower()}"
+        espera = throttle.LOGIN.locked(clave_intentos)
+        if espera:
+            return jsonify({'success': False, 'retry_after': espera,
+                            'message': f'Demasiados intentos fallidos. Espera {espera} s.'}), 429
+        
         result = UserCRUD.verify_password(data['email'], data['password'])
+        (throttle.LOGIN.reset if result['success'] else throttle.LOGIN.fail)(clave_intentos)
         
         if result['success'] and not result['user'].get('verified'):
             return jsonify({'success': False, 'code': 'EMAIL_NOT_VERIFIED',
@@ -138,7 +146,14 @@ def face_login():
             return jsonify({'success': False, 'message': 'Usuario no tiene imagen facial registrada'}), 400
         
         # Verificar rostro
+        clave_intentos = f"face:{user.email.lower()}"
+        espera = throttle.FACE.locked(clave_intentos)
+        if espera:
+            return jsonify({'success': False, 'retry_after': espera,
+                            'message': f'Demasiados intentos fallidos. Espera {espera} s.'}), 429
+        
         face_result = face_service.verify_user_face(user.base64vector, data['face_image'])
+        (throttle.FACE.reset if face_result['verified'] else throttle.FACE.fail)(clave_intentos)
         
         if face_result['verified']:
             # Generar JWT token

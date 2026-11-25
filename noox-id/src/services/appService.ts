@@ -76,7 +76,9 @@ export class AppService {
 
   // Agregar usuario a aplicación
   static async addUserToApp(appId: number, userData: {
-    id_usuario: number;
+    id_usuario?: number;
+    /** Alternativa a id_usuario: el servidor busca al usuario por su correo. */
+    email?: string;
     status?: 'enable' | 'disable';
     TokenToAcces?: number;
   }): Promise<ApiResponse> {

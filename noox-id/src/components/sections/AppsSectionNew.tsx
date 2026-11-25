@@ -352,7 +352,7 @@ const AppsSection: React.FC = () => {
                       {visibleApiKeys.has(app.id) ? <EyeOff size={16} /> : <Eye size={16} />}
                     </button>
                     <button
-                      onClick={() => copyToClipboard(app.api_key)}
+                      onClick={() => copyToClipboard(app.api_key ?? "")}
                       style={{
                         background: 'none',
                         border: 'none',

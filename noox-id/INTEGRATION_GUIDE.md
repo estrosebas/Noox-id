@@ -123,6 +123,30 @@ administración con rostro + TOTP.
 - **Límites conocidos:** no hay códigos de recuperación (si el usuario pierde el teléfono hay que
   reiniciar su TOTP a mano en la base) y `/api/auth/face-login` del propio dashboard no pide TOTP.
 
+#### **Endurecimiento de seguridad del backend**
+Cambios que afectan a quien ya integró o desplegó NooxID:
+
+- **API keys.** El servidor guarda solo su hash. El texto se entrega una única vez, al crear la app o al
+  regenerar la clave (el panel lo muestra con un aviso para copiarla). Las claves anteriores siguen
+  funcionando: se convierten a hash solo al arrancar. Si perdiste una, regenérala.
+- **Pertenencia usuario-aplicación.** Un usuario solo puede autenticarse en una app (`verify-user`,
+  `otp/request`, `otp/verify`) si el propietario lo autorizó: *Aplicaciones vinculadas > Usuarios autorizados*
+  (o `POST /api/apps/<id>/users` con `{"email": "..."}`). Sin eso, `verify-user` responde 403
+  `NOT_A_MEMBER`.
+- **Administradores.** `ADMIN_EMAILS` (correos separados por coma, en `.env`) define quién puede cambiar el
+  umbral facial (`POST /api/face/tolerance`) y listar o buscar usuarios (`/api/users/`, `/search`). Cada
+  usuario solo ve su propio registro.
+- **Perfil.** `PUT /api/users/profile` y `/<id>` aceptan solo nombre, apellido, imagen de perfil y
+  contraseña (esta exige `current_password`). El correo, `verified`, `googleid` y el vector facial ya no se
+  pueden editar por ahí.
+- **Límite de intentos** (429 con `retry_after`): 10 fallos de contraseña en 15 min por correo; 5 fallos de
+  rostro en 15 min por correo (login facial) y por app + correo (`verify-user`). Los contadores viven en la
+  memoria del proceso.
+- **Servidor.** Sin `SECRET_KEY` se genera una aleatoria en `instance/secret_key` (no se versiona), en vez de
+  un valor público por defecto; el cambio invalida las sesiones y los secretos TOTP creados con la clave
+  anterior. El depurador (`FLASK_DEBUG=true`) solo se activa en `127.0.0.1`; por defecto está apagado y el
+  servidor escucha en `127.0.0.1` (usa `HOST=0.0.0.0` solo si lo necesitas).
+
 #### **Verificación del correo al registrarse**
 Al registrarse, NooxID envía un código de 6 dígitos al correo y la cuenta no puede iniciar sesión hasta
 verificarlo (contraseña, rostro y apps externas devuelven 403 con `code: "EMAIL_NOT_VERIFIED"`).

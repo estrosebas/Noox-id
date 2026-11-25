@@ -1,8 +1,15 @@
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
+import hashlib
+import hmac
 import secrets
 
 db = SQLAlchemy()
+
+
+def hash_api_key(clave):
+    """Las API keys son aleatorias de 256 bits, por lo que un SHA-256 simple basta (no hace falta un hash lento)."""
+    return 'h1:' + hashlib.sha256(clave.encode('utf-8')).hexdigest()
 
 class User(db.Model):
     __tablename__ = 'users'
@@ -56,24 +63,35 @@ class App(db.Model):
     IconAppPath = db.Column(db.String(500), nullable=True)
     # Si es True, tras validar el rostro se exige además un código TOTP (p. ej. app de administración).
     requires_totp = db.Column(db.Boolean, default=False, nullable=False, server_default='0')
+    # `api_key` guarda el HASH de la clave (nunca el texto); el prefijo sirve para reconocerla en el panel
+    api_key_prefix = db.Column(db.String(16), nullable=True)
 
     # Relaciones
     user_apps = db.relationship('UserInApp', backref='app', lazy=True)
     
     def __init__(self, **kwargs):
         super(App, self).__init__(**kwargs)
+        self.plain_api_key = None
         if not self.api_key:
-            self.api_key = self.generate_api_key()
-    
-    def generate_api_key(self):
-        return f"noox_{secrets.token_urlsafe(32)}"
-    
+            self.set_new_api_key()
+
+    def set_new_api_key(self):
+        """Genera una clave nueva y guarda solo su hash. El texto se entrega una única vez (plain_api_key)."""
+        clave = f"noox_{secrets.token_urlsafe(32)}"
+        self.api_key = hash_api_key(clave)
+        self.api_key_prefix = clave[:10]
+        self.plain_api_key = clave
+        return clave
+
+    def check_api_key(self, candidata):
+        return bool(candidata) and hmac.compare_digest(self.api_key, hash_api_key(candidata))
+
     def to_dict(self):
         return {
             'id': self.id,
             'name_app': self.name_app,
             'owner': self.owner,
-            'api_key': self.api_key,
+            'api_key_prefix': self.api_key_prefix,
             'last_edit': self.last_edit.isoformat() if self.last_edit else None,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'is_verified': self.is_verified,

@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Smartphone, Edit, Trash2, Plus, RefreshCw, Key, Copy, Eye, EyeOff } from 'lucide-react';
+import { Smartphone, Edit, Trash2, Plus, RefreshCw, Key, Copy, Eye, EyeOff, UserPlus } from 'lucide-react';
 import { AppService } from '../../services/appService';
-import type { App } from '../../services/api';
+import type { App, AppUser } from '../../services/api';
 
 const AppsSection: React.FC = () => {
   const [apps, setApps] = useState<App[]>([]);
@@ -13,6 +13,12 @@ const AppsSection: React.FC = () => {
   const [newAppName, setNewAppName] = useState('');
   const [newAppRequiresTotp, setNewAppRequiresTotp] = useState(false);
   const [editingApp, setEditingApp] = useState<App | null>(null);
+  // El servidor solo guarda el hash de la API key: el texto llega una vez (al crear o regenerar) y se guarda aquí
+  const [revealedKeys, setRevealedKeys] = useState<Record<number, string>>({});
+  const [openMembers, setOpenMembers] = useState<number | null>(null);
+  const [members, setMembers] = useState<Record<number, AppUser[]>>({});
+  const [newMemberEmail, setNewMemberEmail] = useState('');
+  const [memberError, setMemberError] = useState('');
 
   useEffect(() => {
     loadApps();
@@ -44,6 +50,7 @@ const AppsSection: React.FC = () => {
         requires_totp: newAppRequiresTotp
       });
       if (response.success) {
+        if (response.app?.api_key) mostrarClave(response.app.id, response.app.api_key);
         setNewAppName('');
         setNewAppRequiresTotp(false);
         setShowCreateForm(false);
@@ -65,6 +72,53 @@ const AppsSection: React.FC = () => {
       }
     } catch (error) {
       console.error('Error updating app:', error);
+    }
+  };
+
+  const mostrarClave = (appId: number, clave: string) => {
+    setRevealedKeys((prev) => ({ ...prev, [appId]: clave }));
+    setVisibleApiKeys((prev) => new Set(prev).add(appId));
+  };
+
+  const loadMembers = async (appId: number) => {
+    try {
+      const response = await AppService.getAppUsers(appId, 1, 100);
+      setMembers((prev) => ({ ...prev, [appId]: response.app_users ?? response.data?.app_users ?? [] }));
+    } catch (error) {
+      console.error('Error loading app users:', error);
+    }
+  };
+
+  const toggleMembers = async (appId: number) => {
+    setMemberError('');
+    setNewMemberEmail('');
+    if (openMembers === appId) {
+      setOpenMembers(null);
+      return;
+    }
+    setOpenMembers(appId);
+    await loadMembers(appId);
+  };
+
+  const handleAddMember = async (e: React.FormEvent, appId: number) => {
+    e.preventDefault();
+    setMemberError('');
+    try {
+      await AppService.addUserToApp(appId, { email: newMemberEmail.trim() });
+      setNewMemberEmail('');
+      await loadMembers(appId);
+    } catch (error) {
+      setMemberError(error instanceof Error ? error.message : 'No se pudo agregar al usuario');
+    }
+  };
+
+  const handleRemoveMember = async (appId: number, userId: number) => {
+    if (!confirm('¿Quitar a este usuario de la aplicación? Ya no podrá autenticarse en ella.')) return;
+    try {
+      await AppService.removeUserFromApp(appId, userId);
+      await loadMembers(appId);
+    } catch (error) {
+      setMemberError(error instanceof Error ? error.message : 'No se pudo quitar al usuario');
     }
   };
 
@@ -104,6 +158,7 @@ const AppsSection: React.FC = () => {
     try {
       const response = await AppService.regenerateApiKey(appId);
       if (response.success) {
+        if (response.app?.api_key) mostrarClave(appId, response.app.api_key);
         await loadApps();
       }
     } catch (error) {
@@ -399,7 +454,7 @@ const AppsSection: React.FC = () => {
                       {visibleApiKeys.has(app.id) ? <EyeOff size={16} /> : <Eye size={16} />}
                     </button>
                     <button
-                      onClick={() => copyToClipboard(app.api_key)}
+                      onClick={() => copyToClipboard(revealedKeys[app.id] ?? '')}
                       style={{
                         background: 'none',
                         border: 'none',
@@ -437,11 +492,15 @@ const AppsSection: React.FC = () => {
                   borderRadius: '4px',
                   border: '1px solid #374151'
                 }}>
-                  {visibleApiKeys.has(app.id) 
-                    ? app.api_key 
-                    : '●●●●●●●●●●●●●●●●●●●●●●●●●●●●●●●●'
-                  }
+                  {revealedKeys[app.id] && visibleApiKeys.has(app.id)
+                    ? revealedKeys[app.id]
+                    : `${app.api_key_prefix ?? ''}●●●●●●●●●●●●●●●●●●●●●●`}
                 </code>
+                <div style={{ fontSize: '12px', color: revealedKeys[app.id] ? '#fbbf24' : '#9aa0a6', marginTop: '8px' }}>
+                  {revealedKeys[app.id]
+                    ? 'Copia tu clave ahora: no volverá a mostrarse.'
+                    : 'Por seguridad solo se guarda un hash de la clave. Si la perdiste, regenérala.'}
+                </div>
               </div>
 
               {/* Segundo factor */}
@@ -488,6 +547,66 @@ const AppsSection: React.FC = () => {
                 >
                   <span style={{ width: '20px', height: '20px', borderRadius: '50%', backgroundColor: '#fff' }} />
                 </button>
+              </div>
+
+              {/* Usuarios autorizados: solo ellos pueden autenticarse en esta app */}
+              <div style={{ padding: '12px', backgroundColor: '#1f2937', borderRadius: '8px', marginBottom: '12px', border: '1px solid #374151' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <div style={{ fontSize: '14px', fontWeight: '500', color: '#e0e0e0' }}>Usuarios autorizados</div>
+                    <div style={{ fontSize: '12px', color: '#9aa0a6' }}>
+                      Solo quienes estén aquí pueden autenticarse en esta aplicación
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    style={{ padding: '6px 10px', fontSize: '12px' }}
+                    onClick={() => toggleMembers(app.id)}
+                  >
+                    <UserPlus size={14} /> {openMembers === app.id ? 'Cerrar' : 'Gestionar'}
+                  </button>
+                </div>
+                {openMembers === app.id && (
+                  <div style={{ marginTop: '12px' }}>
+                    <form onSubmit={(e) => handleAddMember(e, app.id)} style={{ display: 'flex', gap: '8px', marginBottom: '10px' }}>
+                      <input
+                        type="email"
+                        placeholder="correo@empresa.com"
+                        value={newMemberEmail}
+                        onChange={(e) => setNewMemberEmail(e.target.value)}
+                        required
+                        style={{ flex: 1, padding: '8px', border: '1px solid #374151', borderRadius: '6px', backgroundColor: '#111827', color: '#ffffff', fontSize: '14px' }}
+                      />
+                      <button type="submit" className="btn btn-primary" style={{ padding: '6px 12px', fontSize: '13px' }}>
+                        Agregar
+                      </button>
+                    </form>
+                    {memberError && (
+                      <div style={{ color: '#fca5a5', fontSize: '12px', marginBottom: '8px' }}>{memberError}</div>
+                    )}
+                    {(members[app.id] ?? []).length === 0 ? (
+                      <div style={{ fontSize: '12px', color: '#9aa0a6' }}>Aún no hay usuarios autorizados.</div>
+                    ) : (
+                      (members[app.id] ?? []).map((m) => (
+                        <div key={m.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderTop: '1px solid #374151' }}>
+                          <span style={{ fontSize: '13px', color: '#e0e0e0' }}>
+                            {m.email ?? `Usuario ${m.id_usuario}`}
+                            {m.status === 'disable' && <span style={{ color: '#f59e0b' }}> (deshabilitado)</span>}
+                          </span>
+                          <button
+                            type="button"
+                            className="btn btn-danger"
+                            style={{ padding: '4px 8px', fontSize: '12px' }}
+                            onClick={() => handleRemoveMember(app.id, m.id_usuario)}
+                          >
+                            Quitar
+                          </button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Timestamps */}

@@ -20,14 +20,15 @@ Uso:
 """
 
 from app import create_app
+from config import Config
 
 if __name__ == '__main__':
     app = create_app()
     print("🚀 NooxID Backend iniciado")
     print("📱 Reconocimiento facial disponible")
     print("🔑 Gestión de usuarios y aplicaciones")
-    print("🌐 Servidor corriendo en http://localhost:5000")
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    print(f"🌐 Servidor corriendo en http://{Config.HOST}:{Config.PORT}")
+    app.run(debug=Config.DEBUG, host=Config.HOST, port=Config.PORT)
 """
 app.run(
     debug=True,

@@ -14,6 +14,7 @@ NEW_COLUMNS = {
     },
     'apps': {
         'requires_totp': 'BOOLEAN NOT NULL DEFAULT 0',
+        'api_key_prefix': 'VARCHAR(16) NULL',
     },
     'email_otps': {
         'purpose': "VARCHAR(10) NOT NULL DEFAULT 'login'",
@@ -48,3 +49,19 @@ def grandfather_existing_users(db, primera_vez):
     if res.rowcount:
         print(f'Migración: {res.rowcount} usuario(s) existentes marcados como verificados')
     return res.rowcount
+
+
+def hash_existing_api_keys(db):
+    """Las claves guardadas en texto plano por versiones anteriores se sustituyen por su hash (siguen funcionando)."""
+    from models import hash_api_key
+    filas = db.session.execute(text('SELECT id, api_key FROM apps')).fetchall()
+    n = 0
+    for id_app, clave in filas:
+        if clave and not clave.startswith('h1:'):
+            db.session.execute(text('UPDATE apps SET api_key = :h, api_key_prefix = :p WHERE id = :i'),
+                               {'h': hash_api_key(clave), 'p': clave[:10], 'i': id_app})
+            n += 1
+    if n:
+        db.session.commit()
+        print(f'Migración: {n} API key(s) guardadas ahora solo como hash')
+    return n
