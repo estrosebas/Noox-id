@@ -17,9 +17,13 @@ class User(db.Model):
     base64imageprofile = db.Column(db.Text, nullable=True)  # MEDIUMTEXT
     base64vector = db.Column(db.Text, nullable=True)  # MEDIUMTEXT - Vector facial
     ProfilePickPath = db.Column(db.String(500), nullable=True)
+    # Segundo factor TOTP. El secreto se guarda cifrado (ver totp_service) y nunca sale en to_dict().
+    totp_secret = db.Column(db.Text, nullable=True)
+    totp_enabled = db.Column(db.Boolean, default=False, nullable=False, server_default='0')
+    totp_last_step = db.Column(db.BigInteger, default=0, nullable=False, server_default='0')
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    
+
     # Relaciones
     owned_apps = db.relationship('App', backref='owner_user', lazy=True)
     user_apps = db.relationship('UserInApp', backref='user', lazy=True)
@@ -34,6 +38,7 @@ class User(db.Model):
             'email': self.email,
             'googleid': self.googleid,
             'ProfilePickPath': self.ProfilePickPath,
+            'totp_enabled': bool(self.totp_enabled),
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None
         }
@@ -49,7 +54,9 @@ class App(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     is_verified = db.Column(db.Boolean, default=False, nullable=False)
     IconAppPath = db.Column(db.String(500), nullable=True)
-    
+    # Si es True, tras validar el rostro se exige además un código TOTP (p. ej. app de administración).
+    requires_totp = db.Column(db.Boolean, default=False, nullable=False, server_default='0')
+
     # Relaciones
     user_apps = db.relationship('UserInApp', backref='app', lazy=True)
     
@@ -70,7 +77,8 @@ class App(db.Model):
             'last_edit': self.last_edit.isoformat() if self.last_edit else None,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'is_verified': self.is_verified,
-            'IconAppPath': self.IconAppPath
+            'IconAppPath': self.IconAppPath,
+            'requires_totp': bool(self.requires_totp)
         }
 
 class UserInApp(db.Model):

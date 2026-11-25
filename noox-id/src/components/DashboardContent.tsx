@@ -5,6 +5,7 @@ import FaceSection from './sections/FaceSection';
 import EmailSection from './sections/EmailSection';
 import PasswordSection from './sections/PasswordSection';
 import NamesSection from './sections/NamesSection';
+import TotpSection from './sections/TotpSection';
 import AppsSection from './sections/AppsSection';
 import DataSection from './sections/DataSection';
 import ApiSection from './sections/ApiSection';
@@ -22,6 +23,8 @@ const DashboardContent: React.FC<DashboardContentProps> = ({ activeSection, user
         return <ProfileSection user={user} />;
       case 'face':
         return <FaceSection />;
+      case 'totp':
+        return <TotpSection />;
       case 'email':
         return <EmailSection />;
       case 'password':

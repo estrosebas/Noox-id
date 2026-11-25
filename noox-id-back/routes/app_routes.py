@@ -43,7 +43,10 @@ def create_app():
         
         if not data.get('name_app'):
             return jsonify({'success': False, 'message': 'Nombre de aplicación requerido'}), 400
-        
+
+        if 'requires_totp' in data and not isinstance(data['requires_totp'], bool):
+            return jsonify({'success': False, 'message': 'requires_totp debe ser booleano'}), 400
+
         data['owner'] = request.current_user_id
         result = AppCRUD.create_app(data)
         
@@ -104,6 +107,8 @@ def update_app(app_id):
             return jsonify({'success': False, 'message': 'Sin permisos para modificar esta aplicación'}), 403
         
         data = request.get_json()
+        if 'requires_totp' in data and not isinstance(data['requires_totp'], bool):
+            return jsonify({'success': False, 'message': 'requires_totp debe ser booleano'}), 400
         result = AppCRUD.update_app(app_id, data)
         
         return jsonify(result), 200 if result['success'] else 400

@@ -1,6 +1,8 @@
 from flask import Blueprint, request, jsonify
 from face_recognition_service import FaceRecognitionService
 from crud import UserCRUD, AppCRUD
+from models import db, User
+import totp_service
 import jwt
 from config import Config
 
@@ -88,15 +90,96 @@ def verify_user_face():
         
         # Verificar rostro
         face_result = face_service.verify_user_face(user.base64vector, data['face_image'])
-        
-        return jsonify({
+        face_ok = bool(face_result.get('verified'))
+        requires_totp = bool(app.get('requires_totp'))
+
+        response = {
             'success': True,
             'verification': face_result,
             'user_id': user.id,
+            'app_id': app['id'],
+            # `authenticated` es lo que debe mirar la app cliente: sin TOTP coincide con el rostro;
+            # con TOTP queda en False hasta canjear el reto en /verify-totp.
+            'authenticated': face_ok and not requires_totp,
+            'requires_totp': requires_totp,
+            'totp_required': False,
+            'totp_setup_required': False,
+        }
+
+        if face_ok and requires_totp:
+            if user.totp_enabled:
+                response['totp_required'] = True
+                response['challenge_token'] = totp_service.create_challenge(user.id, app['id'])
+                response['message'] = 'Rostro verificado. Falta el código del autenticador.'
+            else:
+                response['totp_setup_required'] = True
+                response['message'] = ('Esta aplicación exige el autenticador (TOTP) y el usuario aún no '
+                                       'lo ha configurado en NooxID.')
+
+        return jsonify(response), 200
+
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@face_bp.route('/verify-totp', methods=['POST'])
+def verify_totp():
+    """Segundo paso: canjea el reto de /verify-user por el código TOTP - Endpoint público con API key"""
+    try:
+        app, error_response, status_code = verify_api_key()
+        if error_response:
+            return error_response, status_code
+
+        data = request.get_json(silent=True) or {}
+        if not data.get('challenge_token') or not data.get('totp_code'):
+            return jsonify({'success': False, 'authenticated': False,
+                            'message': 'challenge_token y totp_code requeridos'}), 400
+
+        try:
+            challenge = totp_service.read_challenge(data['challenge_token'])
+        except jwt.ExpiredSignatureError:
+            return jsonify({'success': False, 'authenticated': False,
+                            'message': 'El reto venció; repite la verificación facial'}), 401
+        except jwt.InvalidTokenError:
+            return jsonify({'success': False, 'authenticated': False, 'message': 'Reto inválido'}), 401
+
+        # El reto solo vale para la app donde se pasó el rostro
+        if challenge.get('app_id') != app['id']:
+            return jsonify({'success': False, 'authenticated': False,
+                            'message': 'El reto no corresponde a esta aplicación'}), 401
+
+        user = User.query.get(challenge['user_id'])
+        if not user or not user.totp_enabled or not user.totp_secret:
+            return jsonify({'success': False, 'authenticated': False,
+                            'message': 'El usuario no tiene el autenticador activo'}), 400
+
+        secret = totp_service.decrypt_secret(user.totp_secret)
+        if not secret:
+            return jsonify({'success': False, 'authenticated': False, 'message': 'Secreto ilegible'}), 500
+
+        wait = totp_service.lock_remaining(user.id)
+        if wait:
+            return jsonify({'success': False, 'authenticated': False, 'retry_after': wait,
+                            'message': f'Demasiados intentos fallidos. Espera {wait} s.'}), 429
+
+        step = totp_service.verify_code(secret, data['totp_code'], last_step=user.totp_last_step or 0)
+        if step is None:
+            totp_service.register_failure(user.id)
+            return jsonify({'success': False, 'authenticated': False,
+                            'message': 'Código incorrecto o vencido'}), 401
+
+        totp_service.clear_failures(user.id)
+        user.totp_last_step = step
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'authenticated': True,
+            'user_id': user.id,
             'app_id': app['id']
         }), 200
-        
+
     except Exception as e:
+        db.session.rollback()
         return jsonify({'success': False, 'message': str(e)}), 500
 
 @face_bp.route('/extract-encoding', methods=['POST'])

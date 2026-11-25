@@ -147,9 +147,10 @@ class AppCRUD:
                 name_app=data['name_app'],
                 owner=data['owner'],
                 is_verified=data.get('is_verified', False),
-                IconAppPath=data.get('IconAppPath')
+                IconAppPath=data.get('IconAppPath'),
+                requires_totp=bool(data.get('requires_totp', False))
             )
-            
+
             db.session.add(app)
             db.session.commit()
             return {'success': True, 'app': app.to_dict(), 'message': 'Aplicación creada exitosamente'}
@@ -213,7 +214,9 @@ class AppCRUD:
                 app.is_verified = data['is_verified']
             if 'IconAppPath' in data:
                 app.IconAppPath = data['IconAppPath']
-            
+            if 'requires_totp' in data:
+                app.requires_totp = bool(data['requires_totp'])
+
             app.last_edit = datetime.utcnow()
             db.session.commit()
             return {'success': True, 'app': app.to_dict(), 'message': 'Aplicación actualizada exitosamente'}

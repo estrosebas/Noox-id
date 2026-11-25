@@ -6,8 +6,9 @@ import {
   Mail, 
   Lock, 
   FileText, 
-  Smartphone, 
-  Download, 
+  Smartphone,
+  ShieldCheck,
+  Download,
   Key, 
   Settings, 
   LogOut 
@@ -23,6 +24,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeSection, onSectionChange, onLog
   const presentationItems = [
     { id: 'profile', icon: User, label: 'Perfil' },
     { id: 'face', icon: Camera, label: 'Registrar rostro' },
+    { id: 'totp', icon: ShieldCheck, label: 'Autenticador (TOTP)' },
     { id: 'email', icon: Mail, label: 'Registrar correo' },
     { id: 'password', icon: Lock, label: 'Contraseña de respaldo' },
     { id: 'names', icon: FileText, label: 'Ingresar nombres' }

@@ -11,6 +11,7 @@ const AppsSection: React.FC = () => {
   const [isCreating, setIsCreating] = useState(false);
   const [visibleApiKeys, setVisibleApiKeys] = useState<Set<number>>(new Set());
   const [newAppName, setNewAppName] = useState('');
+  const [newAppRequiresTotp, setNewAppRequiresTotp] = useState(false);
   const [editingApp, setEditingApp] = useState<App | null>(null);
 
   useEffect(() => {
@@ -21,8 +22,9 @@ const AppsSection: React.FC = () => {
     try {
       setIsLoading(true);
       const response = await AppService.getUserApps();
-      if (response.success && response.data) {
-        setApps(response.data.apps || []);
+      if (response.success) {
+        // El backend devuelve `apps` en la raíz de la respuesta
+        setApps(response.apps ?? response.data?.apps ?? []);
       }
     } catch (error) {
       console.error('Error loading apps:', error);
@@ -37,9 +39,13 @@ const AppsSection: React.FC = () => {
 
     try {
       setIsCreating(true);
-      const response = await AppService.createApp({ name_app: newAppName });
+      const response = await AppService.createApp({
+        name_app: newAppName,
+        requires_totp: newAppRequiresTotp
+      });
       if (response.success) {
         setNewAppName('');
+        setNewAppRequiresTotp(false);
         setShowCreateForm(false);
         await loadApps();
       }
@@ -59,6 +65,23 @@ const AppsSection: React.FC = () => {
       }
     } catch (error) {
       console.error('Error updating app:', error);
+    }
+  };
+
+  const handleToggleTotp = async (app: App) => {
+    const next = !app.requires_totp;
+    const mensaje = next
+      ? `Los usuarios de "${app.name_app}" deberán ingresar un código del autenticador después de validar su rostro. Quienes no lo hayan configurado no podrán entrar. ¿Activar?`
+      : `Los usuarios de "${app.name_app}" volverán a entrar solo con el rostro. ¿Desactivar el autenticador?`;
+    if (!confirm(mensaje)) return;
+
+    try {
+      const response = await AppService.updateApp(app.id, { requires_totp: next });
+      if (response.success) {
+        await loadApps();
+      }
+    } catch (error) {
+      console.error('Error updating TOTP requirement:', error);
     }
   };
 
@@ -194,12 +217,27 @@ const AppsSection: React.FC = () => {
                   onClick={() => {
                     setShowCreateForm(false);
                     setNewAppName('');
+                    setNewAppRequiresTotp(false);
                   }}
                   className="btn btn-secondary"
                 >
                   Cancelar
                 </button>
               </div>
+              <label style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', marginTop: '14px', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={newAppRequiresTotp}
+                  onChange={(e) => setNewAppRequiresTotp(e.target.checked)}
+                  style={{ marginTop: '3px' }}
+                />
+                <span style={{ color: '#e0e0e0', fontSize: '14px' }}>
+                  Exigir código del autenticador (TOTP) además del rostro
+                  <span style={{ display: 'block', color: '#9aa0a6', fontSize: '12px' }}>
+                    Recomendado para apps sensibles (administración, finanzas). Un CRM puede quedar solo con rostro.
+                  </span>
+                </span>
+              </label>
             </form>
           </motion.div>
         )}
@@ -298,6 +336,15 @@ const AppsSection: React.FC = () => {
                     }}>
                       {app.is_verified ? '✓ Verificada' : '⚠ Pendiente'}
                     </span>
+                    <span style={{
+                      fontSize: '12px',
+                      padding: '2px 8px',
+                      borderRadius: '12px',
+                      backgroundColor: app.requires_totp ? '#1e3a8a' : '#374151',
+                      color: app.requires_totp ? '#93c5fd' : '#d1d5db'
+                    }}>
+                      {app.requires_totp ? 'Rostro + TOTP' : 'Solo rostro'}
+                    </span>
                     <span style={{ fontSize: '12px', color: '#9aa0a6' }}>
                       ID: {app.id}
                     </span>
@@ -395,6 +442,52 @@ const AppsSection: React.FC = () => {
                     : '●●●●●●●●●●●●●●●●●●●●●●●●●●●●●●●●'
                   }
                 </code>
+              </div>
+
+              {/* Segundo factor */}
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                gap: '12px',
+                padding: '12px',
+                backgroundColor: '#1f2937',
+                borderRadius: '8px',
+                marginBottom: '12px',
+                border: '1px solid #374151'
+              }}>
+                <div>
+                  <div style={{ fontSize: '14px', fontWeight: '500', color: '#e0e0e0' }}>
+                    Código del autenticador (TOTP)
+                  </div>
+                  <div style={{ fontSize: '12px', color: '#9aa0a6' }}>
+                    {app.requires_totp
+                      ? 'Después del rostro se pide un código de 6 dígitos'
+                      : 'El acceso se concede solo con el rostro'}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={!!app.requires_totp}
+                  aria-label={`Exigir TOTP en ${app.name_app}`}
+                  onClick={() => handleToggleTotp(app)}
+                  style={{
+                    flexShrink: 0,
+                    width: '44px',
+                    height: '24px',
+                    borderRadius: '12px',
+                    border: 'none',
+                    cursor: 'pointer',
+                    padding: '2px',
+                    display: 'flex',
+                    justifyContent: app.requires_totp ? 'flex-end' : 'flex-start',
+                    backgroundColor: app.requires_totp ? '#4285f4' : '#4b5563',
+                    transition: 'background-color 0.2s'
+                  }}
+                >
+                  <span style={{ width: '20px', height: '20px', borderRadius: '50%', backgroundColor: '#fff' }} />
+                </button>
               </div>
 
               {/* Timestamps */}

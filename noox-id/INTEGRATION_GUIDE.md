@@ -93,6 +93,30 @@ Maneja el estado global de autenticación:
 - Configuración de tolerancia de reconocimiento
 - Procesamiento de imágenes en backend
 
+#### **Segundo factor por aplicación (TOTP)**
+Cada app puede exigir, además del rostro, un código del autenticador (Google Authenticator, Microsoft
+Authenticator, Authy…). Es una opción por app: un CRM puede quedar solo con rostro y la app de
+administración con rostro + TOTP.
+
+- **Activarlo en la app:** al crear la app (casilla) o después con el interruptor de la tarjeta en
+  *Aplicaciones vinculadas* (`PUT /api/apps/<id>` con `{"requires_totp": true}`).
+- **El usuario configura su autenticador una vez** en *Autenticador (TOTP)*: escanea el QR y confirma con
+  un código (`/api/totp/setup`, `/enable`, `/disable`; JWT).
+- **Flujo para la app cliente (API key):**
+  1. `POST /api/face/verify-user` con `user_email` y `face_image`. La respuesta trae `authenticated`.
+     - App sin TOTP: `authenticated` es `true` si el rostro coincide. Fin.
+     - App con TOTP y rostro correcto: `authenticated: false`, `totp_required: true` y un
+       `challenge_token` (vale 5 min y solo para esa app).
+     - Si el usuario no configuró el autenticador: `totp_setup_required: true` y no se emite reto.
+  2. `POST /api/face/verify-totp` con `{"challenge_token": "...", "totp_code": "123456"}` y las mismas
+     cabeceras `X-API-Key` + `X-App-ID`. Si el código es válido responde `authenticated: true`.
+- **La app cliente debe decidir por `authenticated`**, no por `verification.verified` (que solo dice si el
+  rostro coincidió).
+- **Protecciones:** el secreto se guarda cifrado; cada código sirve una sola vez; 5 fallos en 5 minutos
+  bloquean al usuario 5 minutos (HTTP 429, contador en memoria del proceso); desactivarlo exige un código.
+- **Límites conocidos:** no hay códigos de recuperación (si el usuario pierde el teléfono hay que
+  reiniciar su TOTP a mano en la base) y `/api/auth/face-login` del propio dashboard no pide TOTP.
+
 #### **Manejo de Estado**
 - AuthContext global para autenticación
 - Persistencia automática de tokens

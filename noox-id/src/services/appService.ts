@@ -7,6 +7,7 @@ export class AppService {
   static async createApp(appData: {
     name_app: string;
     IconAppPath?: string;
+    requires_totp?: boolean;
   }): Promise<ApiResponse<App>> {
     const response = await fetch(`${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.APPS}`, {
       method: 'POST',
@@ -42,6 +43,7 @@ export class AppService {
     name_app?: string;
     is_verified?: boolean;
     IconAppPath?: string;
+    requires_totp?: boolean;
   }): Promise<ApiResponse<App>> {
     const response = await fetch(`${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.APPS}/${id}`, {
       method: 'PUT',

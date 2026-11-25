@@ -39,15 +39,19 @@ def create_app():
     from routes.user_routes import user_bp
     from routes.app_routes import app_bp
     from routes.face_recognition_routes import face_bp
-    
+    from routes.totp_routes import totp_bp
+
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
     app.register_blueprint(user_bp, url_prefix='/api/users')
     app.register_blueprint(app_bp, url_prefix='/api/apps')
     app.register_blueprint(face_bp, url_prefix='/api/face')
-    
-    # Crear tablas si no existen
+    app.register_blueprint(totp_bp, url_prefix='/api/totp')
+
+    # Crear tablas si no existen y añadir columnas nuevas a las ya existentes (TOTP)
     with app.app_context():
         db.create_all()
+        from migrations import ensure_schema
+        ensure_schema(db)
     
     @app.route('/')
     def health_check():

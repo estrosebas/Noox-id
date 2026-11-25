@@ -31,7 +31,14 @@ export const API_CONFIG = {
     FACE_EXTRACT_ENCODING: '/api/face/extract-encoding',
     FACE_PROCESS_PROFILE: '/api/face/process-profile-image',
     FACE_TOLERANCE: '/api/face/tolerance',
-    
+    FACE_VERIFY_TOTP: '/api/face/verify-totp',
+
+    // TOTP (segundo factor)
+    TOTP_STATUS: '/api/totp/status',
+    TOTP_SETUP: '/api/totp/setup',
+    TOTP_ENABLE: '/api/totp/enable',
+    TOTP_DISABLE: '/api/totp/disable',
+
     // Health
     HEALTH: '/api/health'
   }
@@ -45,6 +52,7 @@ export interface User {
   email: string;
   verified: boolean;
   ProfilePickPath?: string;
+  totp_enabled?: boolean;
   created_at?: string;
   updated_at?: string;
 }
@@ -58,6 +66,8 @@ export interface App {
   created_at?: string;
   is_verified: boolean;
   IconAppPath?: string;
+  /** Si es true, tras el rostro se exige un código del autenticador (TOTP). */
+  requires_totp?: boolean;
 }
 
 export interface Token {
