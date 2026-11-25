@@ -52,8 +52,12 @@ class Config:
     HOST = _HOST
     PORT = int(os.environ.get('PORT', '5000'))
 
-    # Correos (separados por coma) con permisos de administrador: umbral facial y listado de usuarios
-    ADMIN_EMAILS = {e.strip().lower() for e in os.environ.get('ADMIN_EMAILS', '').split(',') if e.strip()}
+    # Orígenes del navegador permitidos por CORS. CORS_ORIGINS (separados por coma) añade los tuyos.
+    CORS_ORIGINS = [
+        'http://localhost:5173', 'http://localhost:5174', 'http://127.0.0.1:5173',
+        'http://localhost:8080', 'http://127.0.0.1:8080',   # demo-app (python -m http.server 8080)
+        'https://attendanceperu.ooguy.com',
+    ] + [o.strip() for o in os.environ.get('CORS_ORIGINS', '').split(',') if o.strip()]
     SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or 'mysql+pymysql://root:password@localhost/nooxid'
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     

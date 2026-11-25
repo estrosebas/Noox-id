@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify
 from crud import UserCRUD
 from models import User
-from permissions import is_admin
+from permissions import has_permission
 from face_recognition_service import FaceRecognitionService
 import jwt
 from config import Config
@@ -57,8 +57,8 @@ def _datos_permitidos(data, user_id):
 def get_users():
     """Obtener todos los usuarios (paginado)"""
     try:
-        if not is_admin(request.current_user_id):
-            return jsonify({'success': False, 'message': 'Solo un administrador puede listar usuarios'}), 403
+        if not has_permission(request.current_user_id, 'users.list'):
+            return jsonify({'success': False, 'message': 'No tienes permiso para listar usuarios'}), 403
         page = request.args.get('page', 1, type=int)
         per_page = request.args.get('per_page', 10, type=int)
         
@@ -73,7 +73,7 @@ def get_users():
 def get_user(user_id):
     """Obtener usuario por ID"""
     try:
-        if request.current_user_id != user_id and not is_admin(request.current_user_id):
+        if request.current_user_id != user_id and not has_permission(request.current_user_id, 'users.view'):
             return jsonify({'success': False, 'message': 'Sin permisos para ver este usuario'}), 403
         result = UserCRUD.get_user_by_id(user_id)
         return jsonify(result), 200 if result['success'] else 404
@@ -230,8 +230,8 @@ def verify_face():
 def search_users():
     """Buscar usuarios por email o nombre"""
     try:
-        if not is_admin(request.current_user_id):
-            return jsonify({'success': False, 'message': 'Solo un administrador puede buscar usuarios'}), 403
+        if not has_permission(request.current_user_id, 'users.search'):
+            return jsonify({'success': False, 'message': 'No tienes permiso para buscar usuarios'}), 403
         email = request.args.get('email')
         
         if email:

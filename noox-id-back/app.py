@@ -10,7 +10,7 @@ def create_app():
     
     # Configurar CORS para permitir requests desde el frontend React
     CORS(app, 
-         origins=['http://localhost:5174','http://localhost:5173', 'http://127.0.0.1:5173', 'https://attendanceperu.ooguy.com'],
+         origins=Config.CORS_ORIGINS,
          methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
          allow_headers=['Content-Type', 'Authorization', 'X-API-Key', 'X-App-ID'],
          supports_credentials=True,
@@ -41,6 +41,7 @@ def create_app():
     from routes.face_recognition_routes import face_bp
     from routes.totp_routes import totp_bp
     from routes.otp_routes import otp_bp
+    from routes.admin_routes import admin_bp
 
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
     app.register_blueprint(user_bp, url_prefix='/api/users')
@@ -48,6 +49,7 @@ def create_app():
     app.register_blueprint(face_bp, url_prefix='/api/face')
     app.register_blueprint(totp_bp, url_prefix='/api/totp')
     app.register_blueprint(otp_bp, url_prefix='/api/otp')
+    app.register_blueprint(admin_bp, url_prefix='/api/admin')
 
     # Crear tablas si no existen y añadir columnas nuevas a las ya existentes (TOTP)
     with app.app_context():
@@ -57,6 +59,10 @@ def create_app():
         db.create_all()
         agregadas = ensure_schema(db)
         hash_existing_api_keys(db)
+        import rbac
+        rbac.seed()
+        if not rbac.users_with_role('admin'):
+            print('[NooxID] No hay administradores. Crea el primero con: python manage.py make-admin correo@empresa.com')
         # primera vez que se aplica la verificación de correo: tabla nueva o columna `purpose` recién añadida
         grandfather_existing_users(db, (not tabla_otp_existia) or 'email_otps.purpose' in agregadas)
     

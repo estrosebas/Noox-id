@@ -133,9 +133,25 @@ Cambios que afectan a quien ya integró o desplegó NooxID:
   `otp/request`, `otp/verify`) si el propietario lo autorizó: *Aplicaciones vinculadas > Usuarios autorizados*
   (o `POST /api/apps/<id>/users` con `{"email": "..."}`). Sin eso, `verify-user` responde 403
   `NOT_A_MEMBER`.
-- **Administradores.** `ADMIN_EMAILS` (correos separados por coma, en `.env`) define quién puede cambiar el
-  umbral facial (`POST /api/face/tolerance`) y listar o buscar usuarios (`/api/users/`, `/search`). Cada
-  usuario solo ve su propio registro.
+- **Roles y permisos (al estilo `spatie/laravel-permission`).** Los administradores viven en la base de
+  datos, no en el `.env`: tablas `roles`, `permissions`, `role_permissions` y `user_roles`. El código
+  pregunta por permisos (`users.list`, `users.search`, `users.view`, `face.threshold.update`,
+  `roles.manage`), no por quién es el usuario, así que se pueden crear roles nuevos sin tocar las rutas.
+  El rol `admin` y los permisos se crean solos al arrancar. El primer administrador se asigna por consola:
+
+  ```powershell
+  python manage.py make-admin correo@empresa.com   # el usuario debe estar registrado y verificado
+  python manage.py assign correo@empresa.com <rol> # asignar otro rol
+  python manage.py revoke correo@empresa.com <rol>
+  python manage.py roles                           # roles y permisos
+  python manage.py admins
+  ```
+
+  Con el permiso `roles.manage`: `GET /api/admin/roles`, `GET|POST /api/admin/users/<id>/roles` y
+  `DELETE /api/admin/users/<id>/roles/<rol>` (nunca se quita al último administrador). Los permisos se
+  aplican al instante con el mismo token y exigen correo verificado. Sin permiso: 403 con
+  `required_permission`. Solo con `face.threshold.update` se cambia el umbral facial; antes lo podía cambiar
+  cualquier usuario.
 - **Perfil.** `PUT /api/users/profile` y `/<id>` aceptan solo nombre, apellido, imagen de perfil y
   contraseña (esta exige `current_password`). El correo, `verified`, `googleid` y el vector facial ya no se
   pueden editar por ahí.

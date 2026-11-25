@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Demo · App integrada con NooxID</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main>
+    <header>
+      <h1>Intranet Demo</h1>
+      <p>App de ejemplo que inicia sesión con <strong>NooxID</strong> usando una API key.</p>
+    </header>
+
+    <div class="aviso">
+      <strong>Solo para pruebas.</strong> Aquí la API key vive en el navegador. En una app real, las llamadas a NooxID
+      se hacen desde tu servidor y la clave nunca llega al navegador.
+    </div>
+
+    <section class="card" id="config">
+      <h2>1. Conexión con NooxID</h2>
+      <div class="grid">
+        <label>URL de NooxID<input id="baseUrl" value="http://localhost:5000" autocomplete="off"></label>
+        <label>ID de la app<input id="appId" inputmode="numeric" placeholder="1" autocomplete="off"></label>
+        <label class="wide">API key (la que muestra el panel al crear la app)
+          <input id="apiKey" type="password" placeholder="noox_…" autocomplete="off"></label>
+      </div>
+      <button id="guardar" class="secundario">Guardar en esta pestaña</button>
+      <span id="guardado" class="pista"></span>
+    </section>
+
+    <section class="card" id="login">
+      <h2>2. Iniciar sesión</h2>
+      <label>Correo del usuario
+        <input id="email" type="email" placeholder="empleado@empresa.com" autocomplete="off"></label>
+
+      <div class="tabs" role="tablist">
+        <button class="tab activa" data-tab="rostro" role="tab">Rostro</button>
+        <button class="tab" data-tab="codigo" role="tab">Código por correo</button>
+      </div>
+
+      <div id="tab-rostro" class="panel">
+        <video id="video" autoplay playsinline muted></video>
+        <canvas id="canvas" hidden></canvas>
+        <div class="fila">
+          <button id="camara" class="secundario">Activar cámara</button>
+          <button id="capturar" disabled>Capturar y verificar</button>
+        </div>
+      </div>
+
+      <div id="tab-codigo" class="panel" hidden>
+        <div class="fila">
+          <button id="pedirCodigo" class="secundario">Enviarme un código</button>
+        </div>
+        <label>Código de 6 dígitos
+          <input id="codigo" inputmode="numeric" maxlength="6" placeholder="000000" class="codigo" autocomplete="off"></label>
+        <button id="verificarCodigo">Verificar código</button>
+      </div>
+
+      <div id="paso-totp" class="panel totp" hidden>
+        <h3>Segundo factor</h3>
+        <p>Esta app exige el código de tu app autenticadora.</p>
+        <input id="totp" inputmode="numeric" maxlength="6" placeholder="000000" class="codigo" autocomplete="off">
+        <button id="verificarTotp">Verificar código TOTP</button>
+      </div>
+    </section>
+
+    <section class="card" id="resultado" hidden>
+      <h2>Resultado</h2>
+      <div id="estado"></div>
+    </section>
+
+    <section class="card">
+      <h2>Registro de llamadas</h2>
+      <p class="pista">Cada petición a NooxID y su respuesta (la clave no se muestra).</p>
+      <pre id="log">—</pre>
+    </section>
+  </main>
+
+  <script src="noox-client.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

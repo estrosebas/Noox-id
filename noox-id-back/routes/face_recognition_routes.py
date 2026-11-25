@@ -1,9 +1,9 @@
 from flask import Blueprint, request, jsonify
-from face_recognition_service import FaceRecognitionService
+from face_recognition_service import FaceRecognitionService, FaceError
 from crud import UserCRUD, AppCRUD
 from models import db, User, App
 import throttle
-from permissions import is_admin
+from permissions import has_permission
 import totp_service
 from auth_flow import app_auth_response, is_member
 import jwt
@@ -57,6 +57,9 @@ def compare_faces():
             'app_id': app['id']
         }), 200
         
+    except FaceError as e:
+        # imagen sin rostro, borrosa, etc.: error del cliente, no del servidor
+        return jsonify({'success': False, 'code': 'FACE_ERROR', 'message': str(e)}), 400
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
 
@@ -107,6 +110,9 @@ def verify_user_face():
         
         return jsonify(response), 200
 
+    except FaceError as e:
+        # imagen sin rostro, borrosa, etc.: error del cliente, no del servidor
+        return jsonify({'success': False, 'code': 'FACE_ERROR', 'message': str(e)}), 400
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
 
@@ -197,6 +203,9 @@ def extract_face_encoding():
             'app_id': app['id']
         }), 200
         
+    except FaceError as e:
+        # imagen sin rostro, borrosa, etc.: error del cliente, no del servidor
+        return jsonify({'success': False, 'code': 'FACE_ERROR', 'message': str(e)}), 400
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
 
@@ -319,8 +328,9 @@ def manage_tolerance():
             }), 200
         
         elif request.method == 'POST':
-            if not is_admin(request.current_user_id):
-                return jsonify({'success': False, 'message': 'Solo un administrador puede cambiar el umbral'}), 403
+            if not has_permission(request.current_user_id, 'face.threshold.update'):
+                return jsonify({'success': False, 'message': 'No tienes permiso para cambiar el umbral',
+                                'required_permission': 'face.threshold.update'}), 403
             data = request.get_json()
             tolerance = data.get('tolerance')
             

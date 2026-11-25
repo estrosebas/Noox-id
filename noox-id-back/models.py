@@ -46,6 +46,7 @@ class User(db.Model):
             'googleid': self.googleid,
             'ProfilePickPath': self.ProfilePickPath,
             'totp_enabled': bool(self.totp_enabled),
+            'roles': [r.name for r in self.roles],
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None
         }
@@ -155,3 +156,35 @@ class TokenToAccess(db.Model):
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'expires_at': self.expires_at.isoformat() if self.expires_at else None
         }
+
+
+# ---------------------------------------------------------------- roles y permisos (ver rbac.py)
+role_permissions = db.Table(
+    'role_permissions',
+    db.Column('role_id', db.Integer, db.ForeignKey('roles.id', ondelete='CASCADE'), primary_key=True),
+    db.Column('permission_id', db.Integer, db.ForeignKey('permissions.id', ondelete='CASCADE'), primary_key=True),
+)
+
+user_roles = db.Table(
+    'user_roles',
+    db.Column('user_id', db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), primary_key=True),
+    db.Column('role_id', db.Integer, db.ForeignKey('roles.id', ondelete='CASCADE'), primary_key=True),
+)
+
+
+class Permission(db.Model):
+    __tablename__ = 'permissions'
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), unique=True, nullable=False)   # p. ej. 'face.threshold.update'
+    description = db.Column(db.String(255), nullable=True)
+
+
+class Role(db.Model):
+    __tablename__ = 'roles'
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(50), unique=True, nullable=False)    # p. ej. 'admin'
+    label = db.Column(db.String(100), nullable=True)
+    permissions = db.relationship('Permission', secondary=role_permissions, lazy='selectin')
+    users = db.relationship('User', secondary=user_roles, backref=db.backref('roles', lazy='selectin'))
