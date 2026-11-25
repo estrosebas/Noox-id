@@ -98,6 +98,8 @@ class UserCRUD:
                 user.base64vector = data['base64vector']
             if 'ProfilePickPath' in data:
                 user.ProfilePickPath = data['ProfilePickPath']
+            if 'googleid' in data:
+                user.googleid = data['googleid']
             
             user.updated_at = datetime.utcnow()
             db.session.commit()

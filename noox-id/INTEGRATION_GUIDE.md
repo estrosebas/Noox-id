@@ -77,7 +77,13 @@ Maneja el estado global de autenticación:
 
 #### **Autenticación Multi-Modal**
 1. **Email/Password**: Login tradicional con validación
-2. **Google OAuth**: Preparado para integración (mock implementado)
+2. **Google**: botón oficial «Sign in with Google». El navegador envía el ID token que firma Google a
+   `POST /api/auth/google-auth` (`{"id_token": "..."}`) y el servidor lo verifica con Google, comprueba que
+   fue emitido para esta app (`aud`) y que el correo está verificado; el correo y el `googleid` salen del
+   token, nunca de lo que mande el cliente. Requiere el mismo ID de cliente OAuth en `GOOGLE_CLIENT_ID`
+   (backend, `.env`) y `VITE_GOOGLE_CLIENT_ID` (frontend); sin él el acceso con Google queda deshabilitado
+   (503). Antes, este endpoint aceptaba cualquier correo sin verificar y permitía entrar a la cuenta de
+   otra persona.
 3. **Facial Recognition**: Login usando rostro + email
 
 #### **Gestión de Aplicaciones**

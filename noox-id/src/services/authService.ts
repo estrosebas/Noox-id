@@ -93,27 +93,22 @@ export class AuthService {
     return data;
   }
 
-  // Autenticación con Google
-  static async googleAuth(googleData: {
-    firstname?: string;
-    lastname?: string;
-    email: string;
-    googleid: string;
-  }): Promise<ApiResponse<{ user: User; token: string }>> {
+  // Autenticación con Google: se envía el ID token firmado por Google; el servidor lo verifica
+  static async googleAuth(idToken: string): Promise<ApiResponse<{ user: User; token: string }>> {
     const response = await fetch(`${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.AUTH_GOOGLE}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(googleData)
+      body: JSON.stringify({ id_token: idToken })
     });
-    
+
     const data = await handleApiResponse(response);
-    
+
     // Guardar token automáticamente
     if (data.success && data.token) {
       localStorage.setItem('noox_token', String(data.token));
       localStorage.setItem('noox_user', JSON.stringify(data.user));
     }
-    
+
     return data;
   }
 

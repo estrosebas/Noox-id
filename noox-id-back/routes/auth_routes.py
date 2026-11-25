@@ -4,6 +4,7 @@ from face_recognition_service import FaceRecognitionService
 import jwt
 from datetime import datetime, timedelta
 from config import Config
+import google_auth_service
 
 auth_bp = Blueprint('auth', __name__)
 face_service = FaceRecognitionService()
@@ -164,51 +165,58 @@ def verify_token():
 
 @auth_bp.route('/google-auth', methods=['POST'])
 def google_auth():
-    """Autenticación con Google"""
+    """Autenticación con Google. Exige un ID token firmado por Google; el correo y el googleid salen del
+    token verificado, nunca de lo que envíe el cliente."""
     try:
-        data = request.get_json()
-        
-        if not data.get('googleid') or not data.get('email'):
-            return jsonify({'success': False, 'message': 'Google ID y email requeridos'}), 400
-        
-        # Buscar usuario existente por Google ID o email
-        user_result = UserCRUD.get_user_by_email(data['email'])
-        
+        data = request.get_json(silent=True) or {}
+
+        try:
+            claims = google_auth_service.verify_id_token(data.get('id_token'))
+        except google_auth_service.GoogleNotConfigured:
+            return jsonify({'success': False, 'message': 'El acceso con Google no está configurado'}), 503
+        except google_auth_service.GoogleTokenInvalid as e:
+            return jsonify({'success': False, 'message': f'Token de Google inválido: {e}'}), 401
+        except RuntimeError as e:
+            return jsonify({'success': False, 'message': str(e)}), 502
+
+        # Buscar usuario existente por correo verificado por Google
+        user_result = UserCRUD.get_user_by_email(claims['email'])
+
         if user_result['success']:
-            # Usuario existe, actualizar Google ID si es necesario
             user = user_result['user_obj']
+            if user.googleid and user.googleid != claims['sub']:
+                return jsonify({'success': False,
+                                'message': 'Esta cuenta está vinculada a otra cuenta de Google'}), 403
             if not user.googleid:
-                UserCRUD.update_user(user.id, {'googleid': data['googleid']})
+                UserCRUD.update_user(user.id, {'googleid': claims['sub']})
+            user_data = user.to_dict()
         else:
-            # Crear nuevo usuario
-            user_data = {
-                'firstname': data.get('firstname', ''),
-                'lastname': data.get('lastname', ''),
-                'email': data['email'],
-                'googleid': data['googleid'],
-                'verified': True  # Los usuarios de Google se consideran verificados
-            }
-            
-            user_result = UserCRUD.create_user(user_data)
+            user_result = UserCRUD.create_user({
+                'firstname': claims['firstname'],
+                'lastname': claims['lastname'],
+                'email': claims['email'],
+                'googleid': claims['sub'],
+                'verified': True  # Google ya verificó el correo
+            })
             if not user_result['success']:
                 return jsonify(user_result), 400
-        
+            user_data = user_result['user']
+
         # Generar JWT token
-        user_data = user_result['user'] if 'user' in user_result else user_result['user']
         payload = {
             'user_id': user_data['id'],
             'email': user_data['email'],
             'exp': datetime.utcnow() + timedelta(days=7)
         }
-        
+
         token = jwt.encode(payload, Config.SECRET_KEY, algorithm='HS256')
-        
+
         return jsonify({
             'success': True,
             'message': 'Autenticación con Google exitosa',
             'token': token,
             'user': user_data
         }), 200
-        
+
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500

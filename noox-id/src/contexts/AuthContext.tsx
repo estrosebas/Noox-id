@@ -9,12 +9,7 @@ interface AuthContextType {
   isLoading: boolean;
   isAuthenticated: boolean;
   login: (email: string, password: string) => Promise<boolean>;
-  loginWithGoogle: (googleData: {
-    firstname?: string;
-    lastname?: string;
-    email: string;
-    googleid: string;
-  }) => Promise<boolean>;
+  loginWithGoogle: (idToken: string) => Promise<boolean>;
   loginWithFace: (email: string, faceImage: string) => Promise<boolean>;
   requestEmailOtp: (email: string) => Promise<boolean>;
   loginWithEmailOtp: (email: string, code: string) => Promise<boolean>;
@@ -110,17 +105,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  const loginWithGoogle = async (googleData: {
-    firstname?: string;
-    lastname?: string;
-    email: string;
-    googleid: string;
-  }): Promise<boolean> => {
+  const loginWithGoogle = async (idToken: string): Promise<boolean> => {
     setIsLoading(true);
     setError(null);
 
     try {
-      const response = await AuthService.googleAuth(googleData);
+      const response = await AuthService.googleAuth(idToken);
       if (response.success && response.token && response.user) {
         localStorage.setItem('noox_token', String(response.token));
         setUser(response.user);
