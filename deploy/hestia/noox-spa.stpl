@@ -1,0 +1,49 @@
+#=========================================================================#
+# noox-spa · plantilla HTTPS (puerto 443) para el panel (SPA de Vite)      #
+# Sirve el build estático desde el docroot con HSTS forzado y la cámara    #
+# permitida (el panel la usa para el reconocimiento facial).               #
+#=========================================================================#
+
+server {
+    listen      %ip%:%web_ssl_port% ssl;
+    server_name %domain_idn% %alias_idn%;
+    root        %docroot%;
+    index       index.html;
+    access_log  /var/log/%web_system%/domains/%domain%.log combined;
+    error_log   /var/log/%web_system%/domains/%domain%.error.log error;
+
+    ssl_certificate     %ssl_pem%;
+    ssl_certificate_key %ssl_key%;
+    ssl_stapling        on;
+    ssl_stapling_verify on;
+
+    add_header Strict-Transport-Security "max-age=63072000; includeSubDomains" always;
+    add_header X-Content-Type-Options    "nosniff" always;
+    add_header Referrer-Policy           "strict-origin-when-cross-origin" always;
+    # camera=(self): getUserMedia solo desde este origen. Sin esto, algunos navegadores bloquean la cámara.
+    add_header Permissions-Policy        "camera=(self)" always;
+
+    location ^~ /.well-known/acme-challenge/ {
+        default_type "text/plain";
+        try_files    $uri =404;
+    }
+
+    # Archivos con hash en el nombre: caché larga. index.html no se cachea para ver las versiones nuevas.
+    location /assets/ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+        add_header Strict-Transport-Security "max-age=63072000; includeSubDomains" always;
+        add_header X-Content-Type-Options "nosniff" always;
+    }
+
+    location / {
+        try_files $uri $uri/ /index.html;
+        add_header Cache-Control "no-cache";
+        add_header Strict-Transport-Security "max-age=63072000; includeSubDomains" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        add_header Permissions-Policy "camera=(self)" always;
+    }
+
+    include %home%/%user%/conf/web/%domain%/nginx.ssl.conf_*;
+}

@@ -48,6 +48,8 @@ No hay tests de frontend configurados. La URL de la API se toma de `VITE_API_URL
 - Roles y permisos en tablas (`Role`, `Permission`, `role_permissions`, `user_roles`; `rbac.py`, `permissions.py`, `authz.py`). Las rutas piden permisos, no roles (`users.list`, `face.threshold.update`, `roles.manage`…). El primer admin: `python manage.py make-admin correo`.
 - Límite de intentos en memoria (`throttle.py`) y migraciones mínimas de columnas al arrancar (`migrations.py`). Sin `SECRET_KEY` se genera una en `instance/secret_key`.
 - `demo-app/` es una mini app HTML/JS/CSS que integra NooxID con una API key (ver su README); `noox-id/INTEGRATION_GUIDE.md` documenta cada flujo.
+- El backend sirve un SDK público en `/sdk` (`static/sdk/noox-face.js`, MediaPipe en `vendor/` y `mediapipe/`): las apps cliente descargan la cámara guiada de NooxID.
+- `deploy/` tiene el Dockerfile, el compose, las plantillas de HestiaCP (`.tpl`/`.stpl` con HSTS) y los diagramas como código (`diagramas/*.py`, mingrammer/diagrams; `uv run --with diagrams python …`, requiere Graphviz).
 
 ### Frontend
 - `App.tsx` no usa router: alterna `landing` → `auth` → `dashboard` con estado local, y `AuthContext` (`contexts/AuthContext.tsx`) decide si mostrar el dashboard.

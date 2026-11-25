@@ -65,3 +65,18 @@ def hash_existing_api_keys(db):
         db.session.commit()
         print(f'Migración: {n} API key(s) guardadas ahora solo como hash')
     return n
+
+
+def ampliar_columnas_mysql(db):
+    """En MySQL/MariaDB la foto de perfil en base64 necesita MEDIUMTEXT; las bases creadas antes tienen TEXT (64 KB)."""
+    if db.engine.dialect.name not in ('mysql', 'mariadb'):
+        return 0
+    tipo = db.session.execute(text(
+        "SELECT DATA_TYPE FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() "
+        "AND TABLE_NAME = 'users' AND COLUMN_NAME = 'base64imageprofile'")).scalar()
+    if tipo and tipo.lower() == 'text':
+        db.session.execute(text('ALTER TABLE users MODIFY COLUMN base64imageprofile MEDIUMTEXT NULL'))
+        db.session.commit()
+        print('Migración: users.base64imageprofile ampliada a MEDIUMTEXT')
+        return 1
+    return 0

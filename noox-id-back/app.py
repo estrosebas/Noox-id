@@ -9,8 +9,9 @@ def create_app():
     app.config.from_object(Config)
     
     # Configurar CORS para permitir requests desde el frontend React
-    CORS(app, 
-         origins=Config.CORS_ORIGINS,
+    # CORS solo para la API: /sdk es público y fija su propio Access-Control-Allow-Origin
+    CORS(app,
+         resources={r'/api/*': {'origins': Config.CORS_ORIGINS}},
          methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
          allow_headers=['Content-Type', 'Authorization', 'X-API-Key', 'X-App-ID'],
          supports_credentials=True,
@@ -42,6 +43,7 @@ def create_app():
     from routes.totp_routes import totp_bp
     from routes.otp_routes import otp_bp
     from routes.admin_routes import admin_bp
+    from routes.sdk_routes import sdk_bp
 
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
     app.register_blueprint(user_bp, url_prefix='/api/users')
@@ -50,15 +52,17 @@ def create_app():
     app.register_blueprint(totp_bp, url_prefix='/api/totp')
     app.register_blueprint(otp_bp, url_prefix='/api/otp')
     app.register_blueprint(admin_bp, url_prefix='/api/admin')
+    app.register_blueprint(sdk_bp)
 
     # Crear tablas si no existen y añadir columnas nuevas a las ya existentes (TOTP)
     with app.app_context():
         from sqlalchemy import inspect
-        from migrations import ensure_schema, grandfather_existing_users, hash_existing_api_keys
+        from migrations import ensure_schema, grandfather_existing_users, hash_existing_api_keys, ampliar_columnas_mysql
         tabla_otp_existia = inspect(db.engine).has_table('email_otps')
         db.create_all()
         agregadas = ensure_schema(db)
         hash_existing_api_keys(db)
+        ampliar_columnas_mysql(db)
         import rbac
         rbac.seed()
         if not rbac.users_with_role('admin'):

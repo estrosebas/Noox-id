@@ -123,6 +123,28 @@ administración con rostro + TOTP.
 - **Límites conocidos:** no hay códigos de recuperación (si el usuario pierde el teléfono hay que
   reiniciar su TOTP a mano en la base) y `/api/auth/face-login` del propio dashboard no pide TOTP.
 
+#### **SDK de cámara servido por NooxID (MediaPipe)**
+Las apps que integran NooxID no instalan MediaPipe ni el modelo: **los descargan directo de NooxID**.
+
+```html
+<script src="https://api.id.dominio.com/sdk/noox-face.js"></script>
+<div id="camara"></div>
+<script>
+  const cam = NooxFace.mount(document.getElementById('camara'), {
+    onCapture: (foto) => { /* foto = data URL JPEG → verifyFace(email, foto) */ },
+  });
+  cam.start();
+</script>
+```
+
+- NooxID sirve `/sdk/noox-face.js`, `/sdk/vendor/vision_bundle.mjs` y `/sdk/mediapipe/…` (WASM y BlazeFace), públicos y
+  con `Access-Control-Allow-Origin: *`. La app cliente no depende de ningún CDN.
+- La cámara guía el encuadre (un solo rostro, completo, nítido, quieto ~2 s) y entrega la foto; **la identidad la decide
+  el servidor** (YuNet + SFace). No hay prueba de vida.
+- Los archivos de MediaPipe se buscan en `MEDIAPIPE_DIR`, en `static/sdk/mediapipe` (imagen Docker) o en
+  `noox-id/public/mediapipe` (monorepo). Ejemplo completo: `demo-app/`.
+- Despliegue con Docker, Oracle Cloud y plantillas de HestiaCP (HSTS): `deploy/README.md`.
+
 #### **Endurecimiento de seguridad del backend**
 Cambios que afectan a quien ya integró o desplegó NooxID:
 

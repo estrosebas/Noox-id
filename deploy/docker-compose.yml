@@ -1,0 +1,53 @@
+# NooxID: API (Flask + gunicorn) y MariaDB.
+#
+#   cp deploy/.env.docker.example deploy/.env.docker     # y completa los valores
+#   docker compose -f deploy/docker-compose.yml --env-file deploy/.env.docker up -d --build
+#
+# El puerto de la API se publica SOLO en 127.0.0.1: desde fuera se entra únicamente por el Nginx de HestiaCP
+# (HTTPS + HSTS, plantillas en deploy/hestia). MariaDB no publica ningún puerto.
+name: nooxid
+
+services:
+  db:
+    image: mariadb:11
+    restart: unless-stopped
+    environment:
+      MARIADB_DATABASE: nooxid
+      MARIADB_USER: noox
+      MARIADB_PASSWORD: ${DB_PASSWORD:?define DB_PASSWORD en deploy/.env.docker}
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?define DB_ROOT_PASSWORD en deploy/.env.docker}
+    command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci"]
+    volumes:
+      - db-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [interna]
+
+  api:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.api
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file: .env.docker
+    environment:
+      DATABASE_URL: mysql+pymysql://noox:${DB_PASSWORD}@db:3306/nooxid?charset=utf8mb4
+      HOST: 0.0.0.0
+      FLASK_DEBUG: "false"
+    ports:
+      - "127.0.0.1:5000:5000"
+    volumes:
+      - api-instance:/app/instance      # clave secreta generada si no defines SECRET_KEY
+    networks: [interna]
+
+volumes:
+  db-data:
+  api-instance:
+
+networks:
+  interna: {}

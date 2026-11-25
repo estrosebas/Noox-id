@@ -1,0 +1,15 @@
+**/.git
+**/node_modules
+**/__pycache__
+**/*.pyc
+**/.env
+**/.env.*
+!**/.env.example
+**/instance
+**/uploads
+noox-id/dist
+noox-id/src
+articulo
+demo-app
+deploy
+docs

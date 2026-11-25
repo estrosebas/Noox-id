@@ -1,10 +1,14 @@
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy.dialects.mysql import MEDIUMTEXT
 from datetime import datetime
 import hashlib
 import hmac
 import secrets
 
 db = SQLAlchemy()
+
+# La foto de perfil en base64 (≈100–150 KB) no cabe en un TEXT de MySQL/MariaDB (64 KB): ahí se usa MEDIUMTEXT.
+TextoLargo = db.Text().with_variant(MEDIUMTEXT(), 'mysql', 'mariadb')
 
 
 def hash_api_key(clave):
@@ -21,7 +25,7 @@ class User(db.Model):
     email = db.Column(db.String(255), unique=True, nullable=False)
     password = db.Column(db.String(255), nullable=True)  # Nullable para usuarios de Google
     googleid = db.Column(db.String(255), unique=True, nullable=True)
-    base64imageprofile = db.Column(db.Text, nullable=True)  # MEDIUMTEXT
+    base64imageprofile = db.Column(TextoLargo, nullable=True)  # MEDIUMTEXT en MySQL/MariaDB
     base64vector = db.Column(db.Text, nullable=True)  # MEDIUMTEXT - Vector facial
     ProfilePickPath = db.Column(db.String(500), nullable=True)
     # Segundo factor TOTP. El secreto se guarda cifrado (ver totp_service) y nunca sale en to_dict().

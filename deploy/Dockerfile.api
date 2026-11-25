@@ -1,0 +1,35 @@
+# API de NooxID para Oracle Cloud Ampere (linux/arm64) y también linux/amd64.
+# Contexto de construcción = raíz del repositorio (ver docker-compose.yml).
+FROM python:3.12-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
+
+# libglib2.0-0: la pide OpenCV aun en su variante headless
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libglib2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY noox-id-back/requirements.txt ./requirements.txt
+# En el servidor no hay pantalla: se usa OpenCV headless (misma versión) y gunicorn como servidor WSGI
+RUN sed -i 's/^opencv-python==/opencv-python-headless==/' requirements.txt \
+    && pip install -r requirements.txt gunicorn==23.0.0
+
+COPY noox-id-back/ ./
+# MediaPipe y BlazeFace que NooxID sirve a las apps cliente en /sdk (se reutilizan los del panel)
+COPY noox-id/public/mediapipe ./static/sdk/mediapipe
+
+RUN useradd --system --uid 10001 --no-create-home noox \
+    && mkdir -p instance uploads \
+    && chown -R noox:noox /app
+USER noox
+
+EXPOSE 5000
+HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/api/health', timeout=4)"
+
+# UN solo proceso con hilos: los contadores de intentos fallidos viven en memoria y no se comparten entre procesos
+CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "1", "--threads", "4", "--timeout", "60", "app:create_app()"]

@@ -3,6 +3,8 @@
 Mini app en HTML, JS y CSS puros (sin build) para probar una API key de NooxID de punta a punta.
 
 - `noox-client.js`: **la integración completa** (30 líneas, comentarios incluidos): un POST con `X-API-Key` y `X-App-ID`.
+- La **cámara con MediaPipe no está en esta carpeta**: la app descarga `/sdk/noox-face.js` directo de NooxID, que también
+  sirve MediaPipe y el modelo BlazeFace. Una app cliente no instala nada.
 - `app.js`, `index.html`, `styles.css`: solo la pantalla.
 
 ## Cómo probarla
@@ -18,11 +20,12 @@ Mini app en HTML, JS y CSS puros (sin build) para probar una API key de NooxID d
    python -m http.server 8080
    ```
 
-5. Abre <http://localhost:8080>, pega el ID de la app y la API key, escribe el correo y prueba **Rostro** o
-   **Código por correo**. Si la app exige TOTP, después aparece el paso del código del autenticador.
+5. Abre <http://localhost:8080>, pega la URL de NooxID, el ID de la app y la API key, y pulsa **Conectar**. Luego
+   escribe el correo y prueba **Rostro** (cámara guiada) o **Código por correo**. Si la app exige TOTP, después
+   aparece el paso del código del autenticador.
 
-El backend permite el origen `http://localhost:8080` por defecto (CORS). Para otro origen usa `CORS_ORIGINS`
-en el `.env` del backend.
+El backend permite el origen `http://localhost:8080` por defecto (CORS). Para otro origen usa `CORS_ORIGINS` en el
+`.env` del backend. Los archivos de `/sdk` son públicos y se pueden cargar desde cualquier origen.
 
 ## Qué es lo único que debe mirar tu app
 
@@ -30,4 +33,4 @@ El campo `authenticated` de la respuesta. Es `true` solo cuando el usuario pasó
 exige. `totp_required` indica que falta el segundo paso (`verify-totp` con el `challenge_token`).
 
 > ⚠️ La API key en el navegador es solo para esta demo. En producción, las llamadas se hacen desde el servidor de
-> tu app.
+> tu app. El SDK de cámara sí corre en el navegador: solo entrega la foto; quien decide la identidad es NooxID.

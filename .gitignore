@@ -1,0 +1,5 @@
+# Secretos del despliegue
+deploy/.env.docker
+
+# Fotos y datos biométricos de pruebas
+articulo/datos/

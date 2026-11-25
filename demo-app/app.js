@@ -1,125 +1,166 @@
-// Interfaz de la demo. La integración con NooxID está en noox-client.js; aquí solo hay pantalla.
+// Pantalla de la demo. La integración con NooxID está en noox-client.js; la cámara viene del SDK que sirve NooxID.
 const $ = (id) => document.getElementById(id);
-let cliente = null;
+let cliente = null;       // NooxClient
+let camara = null;        // controlador de NooxFace
 let reto = null;          // challenge_token cuando la app exige TOTP
-let stream = null;
+let primerMetodo = null;  // cómo pasó el primer factor (rostro o código)
+let metodo = 'rostro';
 
-// ------------------------------------------------------------------ configuración
-function leerConfig() {
-  return { baseUrl: $('baseUrl').value.trim(), appId: $('appId').value.trim(), apiKey: $('apiKey').value.trim() };
+// ------------------------------------------------------------------ vistas y pasos
+function vista(nombre) {
+  for (const v of document.querySelectorAll('.vista')) v.hidden = v.id !== 'v-' + nombre;
+  const orden = ['conexion', 'primero', 'segundo', 'acceso'];
+  const actual = { conexion: 'conexion', login: 'primero', totp: 'segundo', ok: 'acceso' }[nombre];
+  const i = orden.indexOf(actual);
+  document.querySelectorAll('#pasos li').forEach((li) => {
+    const k = orden.indexOf(li.dataset.paso);
+    li.classList.toggle('hecho', k < i || (nombre === 'ok' && k <= i));
+    li.classList.toggle('activo', k === i && nombre !== 'ok');
+    li.classList.remove('omitido');
+  });
+  if (nombre === 'ok' && !reto) document.querySelector('[data-paso="segundo"]').classList.replace('hecho', 'omitido');
 }
 
-function crearCliente() {
-  const c = leerConfig();
-  if (!c.baseUrl || !c.appId || !c.apiKey) { mostrar('error', 'Completa la URL, el ID de la app y la API key.'); return null; }
-  cliente = new NooxClient(c);
-  return cliente;
+function aviso(id, tipo, titulo, detalle) {
+  const el = $(id);
+  el.hidden = !titulo;
+  el.className = 'mensaje ' + tipo;
+  el.innerHTML = '<div><strong></strong><small></small></div>';
+  el.querySelector('strong').textContent = titulo || '';
+  el.querySelector('small').textContent = detalle || '';
 }
 
-function cargarGuardado() {
-  const g = JSON.parse(sessionStorage.getItem('noox-demo') || '{}');
-  for (const k of ['baseUrl', 'appId', 'apiKey', 'email']) if (g[k]) $(k).value = g[k];
-}
-
-$('guardar').addEventListener('click', () => {
-  sessionStorage.setItem('noox-demo', JSON.stringify({ ...leerConfig(), email: $('email').value.trim() }));
-  $('guardado').textContent = 'Guardado (se borra al cerrar la pestaña).';
-});
-
-// ------------------------------------------------------------------ registro de llamadas y resultado
 function registrar(titulo, { status, data }) {
   const seguro = JSON.stringify(data, (k, v) => (k === 'challenge_token' && v ? v.slice(0, 16) + '…' : v), 2);
-  const prev = $('log').textContent === '—' ? '' : $('log').textContent + '\n\n';
-  $('log').textContent = prev + `${titulo} → HTTP ${status}\n${seguro}`;
+  const previo = $('log').textContent === '—' ? '' : $('log').textContent + '\n\n';
+  $('log').textContent = previo + `${titulo} → HTTP ${status}\n${seguro}`;
   $('log').scrollTop = $('log').scrollHeight;
 }
 
-function mostrar(tipo, texto, detalle) {
-  $('resultado').hidden = false;
-  const iconos = { ok: '✅', error: '⛔', info: 'ℹ️' };
-  $('estado').className = 'estado ' + tipo;
-  $('estado').innerHTML = `<span class="icono">${iconos[tipo]}</span><div><strong></strong><small></small></div>`;
-  $('estado').querySelector('strong').textContent = texto;
-  $('estado').querySelector('small').textContent = detalle || '';
+// ------------------------------------------------------------------ conexión
+function estadoConexion(estado, texto) {
+  $('chipConexion').dataset.estado = estado;
+  $('chipConexion').querySelector('span').textContent = texto;
 }
 
-// Lee la respuesta de NooxID: lo único que importa es `authenticated`
-function procesar(res) {
+function cargarSdk(baseUrl) {
+  return new Promise((resolve, reject) => {
+    if (window.NooxFace) return resolve();
+    const s = document.createElement('script');
+    s.src = baseUrl + '/sdk/noox-face.js';
+    s.onload = resolve;
+    s.onerror = () => reject(new Error('No se pudo descargar el SDK desde NooxID'));
+    document.head.appendChild(s);
+  });
+}
+
+$('conectar').addEventListener('click', async () => {
+  const baseUrl = $('baseUrl').value.trim().replace(/\/+$/, ''), appId = $('appId').value.trim(), apiKey = $('apiKey').value.trim();
+  if (!baseUrl || !appId || !apiKey) return ($('msgConexion').textContent = 'Completa los tres campos.');
+  $('msgConexion').textContent = 'Conectando…';
+  try {
+    const salud = await fetch(baseUrl + '/api/health').then((r) => r.json());
+    if (salud.status !== 'OK') throw new Error('NooxID no respondió como se esperaba');
+    await cargarSdk(baseUrl);
+    cliente = new NooxClient({ baseUrl, appId, apiKey });
+    $('snipUrl').textContent = baseUrl;
+    estadoConexion('ok', `Conectado · app ${appId} · ${apiKey.slice(0, 10)}…`);
+    $('msgConexion').textContent = '';
+    vista('login');
+  } catch (e) {
+    estadoConexion('error', 'Error de conexión');
+    $('msgConexion').textContent = `${e.message}. ¿Está encendido el servidor y la URL es correcta?`;
+  }
+});
+
+// ------------------------------------------------------------------ resultado de NooxID: solo importa `authenticated`
+const correo = () => $('email').value.trim();
+
+function procesar(res, origen) {
   const d = res.data;
   if (d.authenticated) {
-    $('paso-totp').hidden = true;
-    mostrar('ok', 'Acceso concedido', `Usuario ${d.user_id} autenticado en la app ${d.app_id} (${d.method || 'totp'}).`);
+    mostrarExito(d);
   } else if (d.totp_required) {
     reto = d.challenge_token;
-    $('paso-totp').hidden = false;
+    primerMetodo = d.method;
+    vista('totp');
+    $('totp').value = '';
     $('totp').focus();
-    mostrar('info', 'Falta el segundo factor', 'Ingresa el código de tu app autenticadora.');
-  } else if (d.totp_setup_required) {
-    mostrar('error', 'Acceso denegado', d.message);
   } else {
-    const motivo = d.message || (d.verification && !d.verification.verified ? 'El rostro no coincide.' : 'No se pudo verificar.');
-    mostrar('error', 'Acceso denegado', `${motivo} (HTTP ${res.status})`);
+    const motivo = d.message || (d.verification && !d.verification.verified ? 'El rostro no coincide con el registrado.' : 'No se pudo verificar.');
+    aviso(origen === 'totp' ? 'aviso-totp' : 'aviso-login', 'error', 'Acceso denegado', `${motivo} (HTTP ${res.status})`);
+    if (origen === 'rostro' && camara) camara.retake();
   }
 }
 
+function mostrarExito(d) {
+  const nombres = { face: 'Rostro', email_otp: 'Código por correo' };
+  $('okDetalle').textContent = reto ? 'Rostro o código verificado, y segundo factor TOTP confirmado.' : 'Verificación completada con un solo factor, como exige esta app.';
+  const filas = [['Usuario', '#' + d.user_id], ['App', '#' + d.app_id], ['Primer factor', nombres[d.method || primerMetodo] || 'Verificado'], ['Segundo factor', reto ? 'TOTP' : 'No exigido']];
+  $('okDatos').innerHTML = filas.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('');
+  vista('ok');
+}
+
 async function llamar(titulo, fn) {
-  if (!crearCliente()) return;
   try {
     const res = await fn(cliente);
     registrar(titulo, res);
     return res;
   } catch (e) {
-    mostrar('error', 'No se pudo conectar con NooxID', `${e.message}. ¿Está el servidor encendido y la URL correcta?`);
+    aviso('aviso-login', 'error', 'No se pudo conectar con NooxID', e.message);
   }
 }
 
-const correo = () => $('email').value.trim();
-
-// ------------------------------------------------------------------ pestañas
-document.querySelectorAll('.tab').forEach((t) => t.addEventListener('click', () => {
-  document.querySelectorAll('.tab').forEach((x) => x.classList.toggle('activa', x === t));
-  $('tab-rostro').hidden = t.dataset.tab !== 'rostro';
-  $('tab-codigo').hidden = t.dataset.tab !== 'codigo';
+// ------------------------------------------------------------------ método: rostro / código
+document.querySelectorAll('.seg').forEach((b) => b.addEventListener('click', () => {
+  metodo = b.dataset.metodo;
+  document.querySelectorAll('.seg').forEach((x) => x.classList.toggle('activo', x === b));
+  $('m-rostro').hidden = metodo !== 'rostro';
+  $('m-codigo').hidden = metodo !== 'codigo';
+  aviso('aviso-login', 'info', '');
+  if (metodo !== 'rostro' && camara) camara.stop();
 }));
 
-// ------------------------------------------------------------------ rostro
-$('camara').addEventListener('click', async () => {
-  try {
-    stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } });
-    $('video').srcObject = stream;
-    $('capturar').disabled = false;
-    $('camara').textContent = 'Cámara activa';
-  } catch (e) {
-    mostrar('error', 'No se pudo abrir la cámara', e.message);
-  }
+$('activarCamara').addEventListener('click', () => {
+  if (!correo()) return aviso('aviso-login', 'error', 'Escribe tu correo primero');
+  aviso('aviso-login', 'info', '');
+  $('activarCamara').hidden = true;
+  camara = NooxFace.mount($('camara'), {
+    onCapture: async (foto) => {
+      const res = await llamar('POST /api/face/verify-user', (n) => n.verifyFace(correo(), foto));
+      if (res) procesar(res, 'rostro');
+    },
+  });
+  camara.start();
 });
 
-$('capturar').addEventListener('click', async () => {
-  if (!correo()) return mostrar('error', 'Escribe el correo del usuario.');
-  const v = $('video'), c = $('canvas');
-  c.width = v.videoWidth; c.height = v.videoHeight;
-  c.getContext('2d').drawImage(v, 0, 0);
-  const foto = c.toDataURL('image/jpeg', 0.9);
-  const res = await llamar('POST /api/face/verify-user', (n) => n.verifyFace(correo(), foto));
-  if (res) procesar(res);
-});
-
-// ------------------------------------------------------------------ código por correo
 $('pedirCodigo').addEventListener('click', async () => {
-  if (!correo()) return mostrar('error', 'Escribe el correo del usuario.');
+  if (!correo()) return aviso('aviso-login', 'error', 'Escribe tu correo primero');
   const res = await llamar('POST /api/otp/request', (n) => n.requestEmailCode(correo()));
-  if (res) mostrar(res.status === 200 ? 'info' : 'error', res.data.message || 'Revisa la respuesta.', res.status === 200 ? 'Escribe el código que llegó al correo.' : '');
+  if (!res) return;
+  $('msgCodigo').textContent = res.status === 200 ? 'Código enviado. Revisa tu correo.' : '';
+  aviso('aviso-login', res.status === 200 ? 'info' : 'error', res.data.message || 'Respuesta inesperada');
 });
 
 $('verificarCodigo').addEventListener('click', async () => {
   const res = await llamar('POST /api/otp/verify', (n) => n.verifyEmailCode(correo(), $('codigo').value.trim()));
-  if (res) procesar(res);
+  if (res) procesar(res, 'codigo');
 });
 
 // ------------------------------------------------------------------ segundo factor
 $('verificarTotp').addEventListener('click', async () => {
   const res = await llamar('POST /api/face/verify-totp', (n) => n.verifyTotp(reto, $('totp').value.trim()));
-  if (res) procesar(res);
+  if (res) procesar(res, 'totp');
 });
 
-cargarGuardado();
+$('salir').addEventListener('click', () => {
+  reto = null;
+  primerMetodo = null;
+  if (camara) { camara.destroy(); camara = null; }
+  $('activarCamara').hidden = false;
+  $('codigo').value = '';
+  aviso('aviso-login', 'info', '');
+  vista('login');
+});
+
+vista('conexion');

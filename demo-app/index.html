@@ -3,78 +3,111 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Demo · App integrada con NooxID</title>
+  <title>Intranet Acme · Acceso con NooxID</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <main>
-    <header>
-      <h1>Intranet Demo</h1>
-      <p>App de ejemplo que inicia sesión con <strong>NooxID</strong> usando una API key.</p>
-    </header>
+  <header class="top">
+    <div class="marca"><span class="logo">N</span><div><strong>Intranet Acme</strong><small>Demostración de integración con NooxID</small></div></div>
+    <div class="estado-conexion" id="chipConexion" data-estado="off"><i></i><span>Sin conectar</span></div>
+  </header>
 
-    <div class="aviso">
-      <strong>Solo para pruebas.</strong> Aquí la API key vive en el navegador. En una app real, las llamadas a NooxID
-      se hacen desde tu servidor y la clave nunca llega al navegador.
-    </div>
+  <main class="layout">
+    <aside class="lado">
+      <section class="tarjeta">
+        <h2>Así fluye el acceso</h2>
+        <ol class="pasos" id="pasos">
+          <li data-paso="conexion" class="activo"><b>1</b><div><strong>Conexión</strong><small>URL, app y API key de NooxID</small></div></li>
+          <li data-paso="primero"><b>2</b><div><strong>Primer factor</strong><small>Rostro o código por correo</small></div></li>
+          <li data-paso="segundo"><b>3</b><div><strong>Segundo factor</strong><small>TOTP, solo si la app lo exige</small></div></li>
+          <li data-paso="acceso"><b>4</b><div><strong>Acceso</strong><small>La app mira <code>authenticated</code></small></div></li>
+        </ol>
+      </section>
 
-    <section class="card" id="config">
-      <h2>1. Conexión con NooxID</h2>
-      <div class="grid">
-        <label>URL de NooxID<input id="baseUrl" value="http://localhost:5000" autocomplete="off"></label>
-        <label>ID de la app<input id="appId" inputmode="numeric" placeholder="1" autocomplete="off"></label>
-        <label class="wide">API key (la que muestra el panel al crear la app)
-          <input id="apiKey" type="password" placeholder="noox_…" autocomplete="off"></label>
-      </div>
-      <button id="guardar" class="secundario">Guardar en esta pestaña</button>
-      <span id="guardado" class="pista"></span>
-    </section>
+      <section class="tarjeta codigo-card">
+        <h2>La integración</h2>
+        <pre class="snippet"><code>&lt;script src="<span id="snipUrl">https://tu-nooxid</span>/sdk/noox-face.js"&gt;&lt;/script&gt;
 
-    <section class="card" id="login">
-      <h2>2. Iniciar sesión</h2>
-      <label>Correo del usuario
-        <input id="email" type="email" placeholder="empleado@empresa.com" autocomplete="off"></label>
+<span class="c">// cámara guiada (MediaPipe lo sirve NooxID)</span>
+NooxFace.mount(el, { onCapture })
 
-      <div class="tabs" role="tablist">
-        <button class="tab activa" data-tab="rostro" role="tab">Rostro</button>
-        <button class="tab" data-tab="codigo" role="tab">Código por correo</button>
-      </div>
+<span class="c">// verificación: un POST con la API key</span>
+noox.verifyFace(email, foto)
+<span class="c">// → { authenticated: true }</span></code></pre>
+        <p class="nota">Ni MediaPipe ni el modelo viven en esta página: se descargan de NooxID.</p>
+      </section>
+    </aside>
 
-      <div id="tab-rostro" class="panel">
-        <video id="video" autoplay playsinline muted></video>
-        <canvas id="canvas" hidden></canvas>
-        <div class="fila">
-          <button id="camara" class="secundario">Activar cámara</button>
-          <button id="capturar" disabled>Capturar y verificar</button>
+    <section class="escenario">
+      <div class="aviso"><strong>Solo para pruebas.</strong> Aquí la API key vive en el navegador. En una app real las llamadas a NooxID salen de tu servidor.</div>
+
+      <!-- 1. Conexión -->
+      <div class="vista tarjeta" id="v-conexion">
+        <h1>Conecta esta app con NooxID</h1>
+        <p class="sub">Usa la API key que mostró el panel al crear la aplicación.</p>
+        <div class="grid">
+          <label>URL de NooxID<input id="baseUrl" value="http://localhost:5000" autocomplete="off"></label>
+          <label>ID de la app<input id="appId" inputmode="numeric" placeholder="1" autocomplete="off"></label>
+          <label class="ancho">API key<input id="apiKey" type="password" placeholder="noox_…" autocomplete="off"></label>
+        </div>
+        <div class="acciones">
+          <button id="conectar" class="primario">Conectar</button>
+          <span class="pista" id="msgConexion"></span>
         </div>
       </div>
 
-      <div id="tab-codigo" class="panel" hidden>
-        <div class="fila">
-          <button id="pedirCodigo" class="secundario">Enviarme un código</button>
+      <!-- 2. Primer factor -->
+      <div class="vista tarjeta" id="v-login" hidden>
+        <h1>Inicia sesión</h1>
+        <p class="sub">Escribe tu correo y elige cómo identificarte.</p>
+        <label>Correo
+          <input id="email" type="email" placeholder="empleado@empresa.com" autocomplete="off"></label>
+
+        <div class="segmentos" role="tablist">
+          <button class="seg activo" data-metodo="rostro" role="tab"><span>◉</span> Rostro</button>
+          <button class="seg" data-metodo="codigo" role="tab"><span>✉</span> Código por correo</button>
         </div>
-        <label>Código de 6 dígitos
-          <input id="codigo" inputmode="numeric" maxlength="6" placeholder="000000" class="codigo" autocomplete="off"></label>
-        <button id="verificarCodigo">Verificar código</button>
+
+        <div id="m-rostro" class="metodo">
+          <div id="camara" class="camara"></div>
+          <div class="acciones centro"><button id="activarCamara" class="primario">Activar cámara</button></div>
+          <p class="pista centro">La foto se envía a NooxID, que decide con YuNet + SFace. MediaPipe solo guía el encuadre.</p>
+        </div>
+
+        <div id="m-codigo" class="metodo" hidden>
+          <div class="acciones"><button id="pedirCodigo" class="secundario">Enviarme un código</button><span class="pista" id="msgCodigo"></span></div>
+          <label>Código de 6 dígitos
+            <input id="codigo" class="otp" inputmode="numeric" maxlength="6" placeholder="000000" autocomplete="one-time-code"></label>
+          <div class="acciones"><button id="verificarCodigo" class="primario">Verificar código</button></div>
+        </div>
+
+        <div id="aviso-login" class="mensaje" hidden></div>
       </div>
 
-      <div id="paso-totp" class="panel totp" hidden>
-        <h3>Segundo factor</h3>
-        <p>Esta app exige el código de tu app autenticadora.</p>
-        <input id="totp" inputmode="numeric" maxlength="6" placeholder="000000" class="codigo" autocomplete="off">
-        <button id="verificarTotp">Verificar código TOTP</button>
+      <!-- 3. Segundo factor -->
+      <div class="vista tarjeta" id="v-totp" hidden>
+        <div class="icono-grande">🔐</div>
+        <h1>Un paso más</h1>
+        <p class="sub">Esta aplicación exige el código de tu app autenticadora (TOTP).</p>
+        <input id="totp" class="otp" inputmode="numeric" maxlength="6" placeholder="000000" autocomplete="one-time-code">
+        <div class="acciones centro"><button id="verificarTotp" class="primario">Verificar</button></div>
+        <div id="aviso-totp" class="mensaje" hidden></div>
       </div>
-    </section>
 
-    <section class="card" id="resultado" hidden>
-      <h2>Resultado</h2>
-      <div id="estado"></div>
-    </section>
+      <!-- 4. Acceso -->
+      <div class="vista tarjeta ok" id="v-ok" hidden>
+        <div class="check"><svg viewBox="0 0 52 52"><circle cx="26" cy="26" r="24"/><path d="M15 27l8 8 15-17"/></svg></div>
+        <h1>Acceso concedido</h1>
+        <p class="sub" id="okDetalle"></p>
+        <dl class="datos" id="okDatos"></dl>
+        <div class="acciones centro"><button id="salir" class="secundario">Cerrar sesión de la demo</button></div>
+      </div>
 
-    <section class="card">
-      <h2>Registro de llamadas</h2>
-      <p class="pista">Cada petición a NooxID y su respuesta (la clave no se muestra).</p>
-      <pre id="log">—</pre>
+      <details class="tarjeta registro" id="registro">
+        <summary>Registro técnico de llamadas a NooxID</summary>
+        <p class="pista">Cada petición y su respuesta (la clave no se muestra).</p>
+        <pre id="log">—</pre>
+      </details>
     </section>
   </main>
 
